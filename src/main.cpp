@@ -6,21 +6,33 @@
 // https://github.com/thewknd/VEML6040/
 VEML6040 RGBWSensor;
 
+int APHASE  = 4;
+int AENBL   = 5;
+int BPHASE  = 6;
+int BENBL   = 7;
+
 void setup() {
   Serial.begin(9600);
+	pinMode(APHASE,OUTPUT);
+	pinMode(AENBL,OUTPUT);
+	pinMode(BPHASE,OUTPUT);
+	pinMode(BENBL,OUTPUT);
+	digitalWrite(AENBL,HIGH);
+	digitalWrite(BENBL,HIGH);
+/*
   Wire.begin(); 
   if(!RGBWSensor.begin()) {
     Serial.println("ERROR: couldn't detect the sensor");
     while(1){}
   }
-   
+*/   
   /*
    * init RGBW sensor with: 
    *  - 320ms integration time
    *  - auto mode
    *  - color sensor enable
    */
-    
+/*    
 	RGBWSensor.setConfiguration(VEML6040_IT_320MS + VEML6040_AF_AUTO + VEML6040_SD_ENABLE);
 	
   delay(1500);
@@ -28,9 +40,21 @@ void setup() {
   Serial.println("CCT: Correlated color temperature in \260K");
   Serial.println("AL: Ambient light in lux");
   delay(1500);
+*/
 }
 
+void DELAY_WAIT(){ delay(50);}
+
 void loop() {
+	digitalWrite(APHASE,HIGH);
+	DELAY_WAIT();
+	digitalWrite(BPHASE,HIGH);
+	DELAY_WAIT();
+	digitalWrite(APHASE,LOW);
+	DELAY_WAIT();
+	digitalWrite(BPHASE,LOW);
+	DELAY_WAIT();
+/*
   Serial.print("RED: ");
   Serial.print(RGBWSensor.getRed());  
   Serial.print(" GREEN: ");
@@ -44,4 +68,6 @@ void loop() {
   Serial.print(" AL: ");
   Serial.println(RGBWSensor.getAmbientLight()); 
   delay(400);
+*/
+
 }
