@@ -68,16 +68,19 @@ void setMotor(uint8_t dirL, uint8_t dirR)
 	PORTD = pd | ((ML << 2) | (MR << 6));
 }
 
-void readLine()
+// return: 0:0:0:L2:L1:C:R1:R2 (1=line detected)
+uint8_t readLine()
 {
 	pdPattern = 0;
-	enableLED(1);
-	if (analogRead(PD_L2) < PD_THRESHOLD) pdPattern |= 0x01;
-	if (analogRead(PD_L1) < PD_THRESHOLD) pdPattern |= 0x02;
+	enableSensorLED(1);
+	delay(1);
+	if (analogRead(PD_L2) < PD_THRESHOLD) pdPattern |= 0x10;
+	if (analogRead(PD_L1) < PD_THRESHOLD) pdPattern |= 0x08;
   if (RGBWSensor.getWhite() < RGBW_THRESHOLD) pdPattern |= 0x04; 
-	if (analogRead(PD_R1) < PD_THRESHOLD) pdPattern |= 0x04;
-	if (analogRead(PD_R2) < PD_THRESHOLD) pdPattern |= 0x08;
-	enableLED(0);
+	if (analogRead(PD_R1) < PD_THRESHOLD) pdPattern |= 0x02;
+	if (analogRead(PD_R2) < PD_THRESHOLD) pdPattern |= 0x01;
+	enableSensorLED(0);
+	return(pdPattern);
 }
 
 void setLED(uint8_t r, uint8_t g, uint8_t b)
@@ -94,7 +97,7 @@ void setup() {
 	pinMode(R_A1, OUTPUT); pinMode(R_A1, OUTPUT);
 	pinMode(R_B1, OUTPUT); pinMode(R_B1, OUTPUT);
 	pinMode(MOTOR_nSLEEP, OUTPUT); pinMode(LED_EN, OUTPUT);
-	enableMotor(0); enableLED(0);
+	enableMotor(0); enableSensorLED(0);
 	motorL = 0; motorR = 0;
   Wire.begin(); 
   if(!RGBWSensor.begin()) {
