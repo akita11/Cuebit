@@ -54,6 +54,10 @@ uint8_t changeMotorPattern(uint8_t m, uint8_t dir)
 
 void setMotor(uint8_t dirL, uint8_t dirR)
 {
+	// swap direction for right motor	
+	if (dirR == MOTOR_DIR_CW) dirR = MOTOR_DIR_CCW;
+	else if (dirR == MOTOR_DIR_CCW) dirR = MOTOR_DIR_CW;
+
 	motorL = changeMotorPattern(motorL, dirL);
 	motorR = changeMotorPattern(motorR, dirR);
 
@@ -136,8 +140,6 @@ void setLED(uint8_t r, uint8_t g, uint8_t b)
 	pixel.setPixelColor(0,  pixel.Color(r, g, b)); pixel.show();
 }
 
-
-
 void setup() {
 	Serial.begin(115200);
   pixel.begin(); pixel.clear();
@@ -157,14 +159,31 @@ void setup() {
 }
 
 void loop() {
-/*
 	enableMotor(1);
 	for (uint16_t i = 0; i < 1024; i++){
-		setMotor(MOTOR_DIR_CW, MOTOR_DIR_CCW);
-		delay(3);
+		setMotor(MOTOR_DIR_CW, MOTOR_DIR_CW);
+		delay(4);
 	}
+	delay(500);
+	for (uint16_t i = 0; i < 1024; i++){
+		setMotor(MOTOR_DIR_CCW, MOTOR_DIR_CCW);
+		delay(4);
+	}
+	delay(500);
+	for (uint16_t i = 0; i < 1024; i++){
+		setMotor(MOTOR_DIR_CW, MOTOR_DIR_CCW);
+		delay(4);
+	}
+	delay(500);
+	for (uint16_t i = 0; i < 1024; i++){
+		setMotor(MOTOR_DIR_CCW, MOTOR_DIR_CW);
+		delay(4);
+	}
+	delay(500);
+
 	enableMotor(0);
-*/
+	delay(1000);
+/*
 	for (uint16_t i = 0; i < 5; i++){
 		uint8_t sensorInfo = readSensor();
 		uint8_t detectedColor = sensorInfo & 0x07;
@@ -172,4 +191,5 @@ void loop() {
 		Serial.print(detectedLine, BIN); Serial.print(" "); Serial.println(detectedColor);
 		delay(50);
 	}
+*/
 }
