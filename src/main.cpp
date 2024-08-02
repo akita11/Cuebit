@@ -30,9 +30,7 @@ uint8_t motor_pattern[] = {0x9, 0x5, 0x6, 0xa};
 #define MOTOR_DIR_CW   1
 #define MOTOR_DIR_CCW  2
 
-#define PD_THRESHOLD 100   // threshold for photo diode
-#define RGBW_THRESHOLD 200 // threshold for RGBW sensor
-uint8_t pdPattern; // {0,0,0,R2,R1,C,L1,L2}
+#define PD_THRESHOLD 800   // threshold for photo diode
 
 Adafruit_NeoPixel pixel(1, LEDC, NEO_GRB + NEO_KHZ800);
 
@@ -68,19 +66,69 @@ void setMotor(uint8_t dirL, uint8_t dirR)
 	PORTD = pd | ((ML << 2) | (MR << 6));
 }
 
-// return: 0:0:0:L2:L1:C:R1:R2 (1=line detected)
-uint8_t readLine()
+#define COLOR_NONE	0
+#define COLOR_WHITE 1
+#define COLOR_BLACK 2
+#define COLOR_RED	  3
+#define COLOR_GREEN 4
+#define COLOR_BLUE  5
+
+uint8_t readSensor()
 {
-	pdPattern = 0;
+	// return: L2:L1:C:R1:R2:{COLOR[2:0]} (1=line detected)
 	enableSensorLED(1);
 	delay(1);
-	if (analogRead(PD_L2) < PD_THRESHOLD) pdPattern |= 0x10;
-	if (analogRead(PD_L1) < PD_THRESHOLD) pdPattern |= 0x08;
-  if (RGBWSensor.getWhite() < RGBW_THRESHOLD) pdPattern |= 0x04; 
-	if (analogRead(PD_R1) < PD_THRESHOLD) pdPattern |= 0x02;
-	if (analogRead(PD_R2) < PD_THRESHOLD) pdPattern |= 0x01;
+	uint8_t sensorInfo = COLOR_NONE;
+	uint16_t sensorR, sensorG, sensorB, sensorW;
+	sensorR = RGBWSensor.getRed();
+	sensorG = RGBWSensor.getGreen();
+	sensorB = RGBWSensor.getBlue();
+	sensorW = RGBWSensor.getWhite();
+	/*
+ 	Serial.print(sensorR); Serial.print(",");
+ 	Serial.print(sensorG); Serial.print(",");
+ 	Serial.print(sensorB); Serial.print(",");
+ 	Serial.print(sensorW); Serial.println("");
+	*/
+	// normalize
+	float sensorRf, sensorGf, sensorBf;
+	sensorRf = (float)sensorR / (float)sensorW * 100.0;
+	sensorGf = (float)sensorG / (float)sensorW * 100.0;
+	sensorBf = (float)sensorB / (float)sensorW * 100.0;
+	//           R     G     B     W      Rf Gf Bf
+	// White     10000 13000 13000 18000  59 71 71
+	// BlackLine 4600  5300  4500  10300  47 55 49
+	// Black     3600  4000  3300  8500   43 49 40
+	// Red       6700  6200  6300  12000  53 43 34
+	// Green     4800  6500  4300  11000  42 59 37
+	// Blue      4800  6000  7300  11000  39 50 62
+	if (sensorW > 15000) sensorInfo = COLOR_WHITE;
+	else{
+		if (sensorBf > 60) sensorInfo = COLOR_BLUE;
+		else if (sensorGf > 58 && sensorRf < 45 && sensorBf < 45) sensorInfo = COLOR_GREEN;
+		else if (sensorRf > 50 && sensorGf < 58 && sensorBf < 58) sensorInfo = COLOR_RED;
+		else sensorInfo = COLOR_BLACK;
+	}
+/*	
+	Serial.print(sensorInfo, HEX); Serial.print(":");
+ 	Serial.print(sensorRf); Serial.print(",");
+ 	Serial.print(sensorGf); Serial.print(",");
+ 	Serial.print(sensorBf); Serial.print(",");
+ 	Serial.print(sensorW); Serial.println("");
+*/
+/*
+  	Serial.print(analogRead(PD_R2)); Serial.print(",");
+  	Serial.print(analogRead(PD_R1)); Serial.print(",");
+  	Serial.print(analogRead(PD_L1)); Serial.print(",");
+  	Serial.print(analogRead(PD_L2)); Serial.print(",,");
+*/
+	if (analogRead(PD_L2) < PD_THRESHOLD) sensorInfo |= 0x80;
+	if (analogRead(PD_L1) < PD_THRESHOLD) sensorInfo |= 0x40;
+  if ((sensorInfo & 0x07) != COLOR_WHITE) sensorInfo |= 0x20; 
+	if (analogRead(PD_R1) < PD_THRESHOLD) sensorInfo |= 0x10;
+	if (analogRead(PD_R2) < PD_THRESHOLD) sensorInfo |= 0x08;
 	enableSensorLED(0);
-	return(pdPattern);
+	return(sensorInfo);
 }
 
 void setLED(uint8_t r, uint8_t g, uint8_t b)
@@ -88,10 +136,11 @@ void setLED(uint8_t r, uint8_t g, uint8_t b)
 	pixel.setPixelColor(0,  pixel.Color(r, g, b)); pixel.show();
 }
 
+
+
 void setup() {
-	RGBWSensor.setConfiguration(VEML6040_IT_320MS + VEML6040_AF_AUTO + VEML6040_SD_ENABLE);
-  pixel.begin(); pixel.clear();
 	Serial.begin(115200);
+  pixel.begin(); pixel.clear();
 	pinMode(L_A1, OUTPUT); pinMode(L_A1, OUTPUT);
 	pinMode(L_B1, OUTPUT); pinMode(L_B1, OUTPUT);
 	pinMode(R_A1, OUTPUT); pinMode(R_A1, OUTPUT);
@@ -100,6 +149,7 @@ void setup() {
 	enableMotor(0); enableSensorLED(0);
 	motorL = 0; motorR = 0;
   Wire.begin(); 
+	RGBWSensor.setConfiguration(VEML6040_IT_320MS + VEML6040_AF_AUTO + VEML6040_SD_ENABLE);
   if(!RGBWSensor.begin()) {
     Serial.println("ERROR: couldn't detect the sensor");
     while(1){}
@@ -107,25 +157,19 @@ void setup() {
 }
 
 void loop() {
-
+/*
 	enableMotor(1);
 	for (uint16_t i = 0; i < 1024; i++){
 		setMotor(MOTOR_DIR_CW, MOTOR_DIR_CCW);
 		delay(3);
 	}
 	enableMotor(0);
+*/
 	for (uint16_t i = 0; i < 5; i++){
-		enableSensorLED(1);
-		delay(1);
-  	Serial.print(analogRead(PD_R2)); Serial.print(",");
-  	Serial.print(analogRead(PD_R1)); Serial.print(",");
-  	Serial.print(analogRead(PD_L1)); Serial.print(",");
-  	Serial.print(analogRead(PD_L2)); Serial.print(",,");
-  	Serial.print(RGBWSensor.getRed()); Serial.print(",");
-  	Serial.print(RGBWSensor.getGreen()); Serial.print(",");
-  	Serial.print(RGBWSensor.getBlue()); Serial.print(",");
-  	Serial.print(RGBWSensor.getWhite()); Serial.println("");
-		enableSensorLED(0);
-		delay(100);
+		uint8_t sensorInfo = readSensor();
+		uint8_t detectedColor = sensorInfo & 0x07;
+		uint8_t detectedLine = sensorInfo >> 3;
+		Serial.print(detectedLine, BIN); Serial.print(" "); Serial.println(detectedColor);
+		delay(50);
 	}
 }
