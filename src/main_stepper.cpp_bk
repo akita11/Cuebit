@@ -7,51 +7,70 @@
 // https://github.com/thewknd/VEML6040/
 VEML6040 RGBWSensor;
 
-#define L_A 5 // PD5
-#define L_B 6 // PD6
-#define R_A 9 // PB1
-#define R_B 10 // PB2
-#define LEDC 3 // for WS2812
-#define LED_EN 2 // PD2
-#define PD_R2 A3
-#define PD_R1 A2
+#define L_A1 2 // PD2
+#define L_A2 3 // PD3
+#define L_B1 4 // PD4
+#define L_B2 5 // PD5
+#define R_A1 6 // PD6
+#define R_A2 7 // PD7
+#define R_B1 8 // PB0
+#define R_B2 9 // PB1
+#define MOTOR_nSLEEP 10
+#define LEDC 11 // for WS2812
+#define LED_EN 13
+#define PD_R2 A0
+#define PD_R1 A3
 #define PD_L1 A1
-#define PD_L2 A0
+#define PD_L2 A2
 
 //#define DEBUG_COLOR
 
 #define PD_THRESHOLD 600   // threshold for photo diode
 
+#define MOTOR_STEP 4
+uint8_t motorL, motorR;
+// ref: https://techweb.rohm.co.jp/product/motor/motor-types/499/
+uint8_t motor_pattern[] = {0x9, 0x5, 0x6, 0xa};
+#define MOTOR_DIR_NONE 0
+#define MOTOR_DIR_CW   1
+#define MOTOR_DIR_CCW  2
+
 Adafruit_NeoPixel pixel(1, LEDC, NEO_GRB + NEO_KHZ800);
 
+void enableMotor(uint8_t f)
+{
+	if (f == 0) digitalWrite(MOTOR_nSLEEP, LOW);
+	else digitalWrite(MOTOR_nSLEEP, HIGH);
+}
 void enableSensorLED(uint8_t f)
 {
 	if (f == 1) digitalWrite(LED_EN, HIGH);
 	else digitalWrite(LED_EN, LOW);
 }
 
-#define MAX_PWM_L 255
-#define MAX_PWM_R 255
-
-uint16_t convMotorPWM(uint8_t max_pwm, float v){
-	return((uint16_t)(max_pwm * v));
+uint8_t changeMotorPattern(uint8_t m, uint8_t dir)
+{
+	if (dir == MOTOR_DIR_CW) m = (m + 1) % MOTOR_STEP;
+	else if (dir == MOTOR_DIR_CCW) m = (m + MOTOR_STEP - 1) % MOTOR_STEP;
+	return(m);
 }
 
-// vL/vR : -1 - +1 / +=FWD, -=BWD
-void setMotorSpeed(float vL, float vR)
+void setMotor(uint8_t dirL, uint8_t dirR)
 {
-	if (vL > 0){
-		analogWrite(L_A, convMotorPWM(MAX_PWM_L, vL));	analogWrite(L_B, 0);
-	}
-	else{
-		analogWrite(L_A, 0); analogWrite(L_B, -convMotorPWM(MAX_PWM_L, vL));
-	}
-	if (vR > 0){
-		analogWrite(R_A, convMotorPWM(MAX_PWM_R, vR));	analogWrite(R_B, 0);
-	}
-	else{
-		analogWrite(R_A, 0); analogWrite(R_B, -convMotorPWM(MAX_PWM_R, vR));
-	}
+	// swap direction for right motor	
+	if (dirR == MOTOR_DIR_CW) dirR = MOTOR_DIR_CCW;
+	else if (dirR == MOTOR_DIR_CCW) dirR = MOTOR_DIR_CW;
+
+	motorL = changeMotorPattern(motorL, dirL);
+	motorR = changeMotorPattern(motorR, dirR);
+
+	uint8_t ML, MR;
+	ML = motor_pattern[motorL];	
+	MR = motor_pattern[motorR];	
+	uint8_t pb, pd;
+	pb = PORTB & 0xfc; pd = PORTD & 0x03;
+	PORTB = pb | (MR >> 2);
+	PORTD = pd | ((ML << 2) | (MR << 6));
 }
 
 #define COLOR_NONE	0
@@ -140,23 +159,26 @@ uint8_t dir = 0;
 // every 10ms
 void timerISR()
 {
-	if (dir == 0) setMotorSpeed(0.5, 0.5);
-	else if (dir == 1) setMotorSpeed(1.0, 1.0);
-	else if (dir == 3) setMotorSpeed(-0.5, -0.5);
-	else if (dir == 4) setMotorSpeed(-1.0, -1.0);
-	else setMotorSpeed(0.0, 0.0);
+	if (dir == 0 || dir == 2) enableMotor(0); else enableMotor(0);
+	if (dir == 0) setMotor(MOTOR_DIR_CW, MOTOR_DIR_CW);
+	else if (dir == 2) setMotor(MOTOR_DIR_CCW, MOTOR_DIR_CCW);
 	tm++;
 	if (tm == 200){
 		tm = 0;
-		dir = (dir + 1) % 6;
+		dir = (dir + 1) % 4;
 	}
 }
 
 void setup() {
 	Serial.begin(115200);
   pixel.begin(); pixel.clear();
-	setMotorSpeed(0.0, 0.0);
-	enableSensorLED(0);
+	pinMode(L_A1, OUTPUT); pinMode(L_A1, OUTPUT);
+	pinMode(L_B1, OUTPUT); pinMode(L_B1, OUTPUT);
+	pinMode(R_A1, OUTPUT); pinMode(R_A1, OUTPUT);
+	pinMode(R_B1, OUTPUT); pinMode(R_B1, OUTPUT);
+	pinMode(MOTOR_nSLEEP, OUTPUT); pinMode(LED_EN, OUTPUT);
+	enableMotor(0); enableSensorLED(0);
+	motorL = 0; motorR = 0;
   Wire.begin(); 
 	RGBWSensor.setConfiguration(VEML6040_IT_40MS + VEML6040_AF_AUTO + VEML6040_SD_ENABLE);
   if(!RGBWSensor.begin()) {
