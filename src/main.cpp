@@ -22,6 +22,14 @@ VEML6040 RGBWSensor;
 
 #define PD_THRESHOLD 600   // threshold for photo diode
 
+#define PD_BLACK 300
+#define PD_WHITE 1000
+
+typedef struct{
+	uint8_t color;
+	float line;
+} SensorData;
+
 Adafruit_NeoPixel pixel(1, LEDC, NEO_GRB + NEO_KHZ800);
 
 void enableSensorLED(uint8_t f)
@@ -93,7 +101,18 @@ uint8_t classify(float R, float G, float B) {
 		else return(COLOR_BLACK);
 }
 
-uint8_t readSensor()
+// PD_BLACK(300) - PD_WHITE(1000) <-> 1.0 - 0.0
+float lineValue(uint16_t val){
+	float v;
+	if (val < PD_BLACK) v = 1.0;
+	else if (val > PD_WHITE) v = 0.0;
+	else{
+		val = (float)(val - PD_WHITE) / (float)(PD_BLACK - PD_WHITE);
+	}
+	return(val);
+}
+
+SensorData readSensor(SensorData sd)
 {
 	// return: L2:L1:C:R1:R2:{COLOR[2:0]} (1=line detected)
 	uint8_t sensorInfo = COLOR_NONE;
@@ -102,11 +121,19 @@ uint8_t readSensor()
 	enableSensorLED(1);
 	delay(2);
 
+/*
 	uint8_t posLine = 0;
 	if (analogRead(PD_L2) < PD_THRESHOLD) posLine |= 0x80;
 	if (analogRead(PD_L1) < PD_THRESHOLD) posLine |= 0x40;
 	if (analogRead(PD_R1) < PD_THRESHOLD) posLine |= 0x10;
 	if (analogRead(PD_R2) < PD_THRESHOLD) posLine |= 0x08;
+*/
+	sd.line = 0.0;
+	sd.line += lineValue(analogRead(PD_L2)) * (-2);
+	sd.line += lineValue(analogRead(PD_L1)) * (-1);
+	// ToDo consider center line value
+	sd.line += lineValue(analogRead(PD_R1)) * (1);
+	sd.line += lineValue(analogRead(PD_R2)) * (2);
 
 	sensorR = RGBWSensor.getRed();
 	sensorG = RGBWSensor.getGreen();
@@ -123,7 +150,8 @@ uint8_t readSensor()
 	if (sensorW > 29000) sensorInfo = COLOR_WHITE;
 	else sensorInfo = classify(sensorRf, sensorGf, sensorBf);
 
-  if ((sensorInfo & 0x07) != COLOR_WHITE) posLine |= 0x20; 
+	sd.color = sensorInfo;
+//  if ((sensorInfo & 0x07) != COLOR_WHITE) posLine |= 0x20; 
 	if (sensorInfo == COLOR_BLACK) setLED(0, 0, 0);
 	else if (sensorInfo == COLOR_RED) setLED(20, 0, 0);
 	else if (sensorInfo == COLOR_GREEN) setLED(0, 20, 0);
@@ -140,7 +168,8 @@ uint8_t readSensor()
  	Serial.print(analogRead(PD_L1)); Serial.print(",");
  	Serial.print(analogRead(PD_L2)); Serial.println(",");
 #endif
-	return(sensorInfo | posLine);
+//	return(sensorInfo | posLine);
+	return(sd);
 }
 
 uint8_t detectedColor, detectedLine;
@@ -190,45 +219,51 @@ void setup() {
 	vL = NORMAL_V; vR = NORMAL_V;
 }
 
+// ToDo: L&R motor calibration using straight move
+
+float lineValue_previous = 0.0;
+
 void loop() {
-	uint8_t sensorInfo = readSensor();
-	detectedColor = sensorInfo & 0x07;
-	detectedLine = sensorInfo >> 3;
+	SensorData sd;
+	sd = readSensor(sd);
+	detectedColor = sd.color;
+	float lineValue = sd.line;
 
-	int lineSum = 0;
-	uint8_t nLine = 0;
-	float lineValue;
-	if (detectedLine & B10000){ lineSum -= 2; nLine++;} // L2
-	if (detectedLine &  B1000){ lineSum -= 1; nLine++;} // L1
-	if (detectedLine &   B100){ nLine++;}
-	if (detectedLine &    B10){ lineSum += 1; nLine++;} // R1
-	if (detectedLine &     B1){ lineSum += 2; nLine++;} // R2
-	if (nLine == 0) lineValue = -1.0; // no line detected
-	else lineValue = (float)lineSum / nLine;
+	// differential value of lineValue
+	float d_lineValue = lineValue - lineValue_previous;
 
+	lineValue_previous = lineValue;
+
+	// P control
 	if (lineValue == -1.0){
 		// seek for line
 	}
 	else{
 		if (lineValue > 0.0){
 			// turn right
-			vL = NORMAL_V + 1.5 * lineValue;
+			vL = NORMAL_V;
 			vR = NORMAL_V - 1.5 * lineValue;
 		}
 		else if (lineValue < 0.0){
 			// turn left
 			vL = NORMAL_V + 1.5 * lineValue;
-			vR = NORMAL_V - 1.5 * lineValue;
+			vR = NORMAL_V;
 		}
 		else{
 			vL = NORMAL_V;
 			vR = NORMAL_V;
 		}
 	}
+
+	// D control
+	vL += d_lineValue * 0.1;
+	vR += d_lineValue * 0.1;
+
 	if (vL > MAX_V) vL = MAX_V;
 	else if (vL < MIN_V) vL = MIN_V;
 	if (vR > MAX_V) vR = MAX_V;
 	else if (vR < MIN_V) vR = MIN_V;
+
 	setMotorSpeed(vL, vR);
 
 	Serial.print(lineValue); Serial.print(' ');
