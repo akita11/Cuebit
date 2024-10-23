@@ -20,21 +20,26 @@ VEML6040 RGBWSensor;
 
 //#define DEBUG_COLOR
 
-#define PD_THRESHOLD 600   // threshold for photo diode
-
 #define TYPE_PD 0
 #define TYPE_COLOR 1
-#define BLACK_PD 45
-#define WHITE_PD 160
-#define BLACK_COLOR 8300
-#define WHITE_COLOR 13000
+#define BLACK_PD_R2 70
+#define WHITE_PD_R2 490
+#define BLACK_PD_R1 45
+#define WHITE_PD_R1 320
+#define BLACK_PD_L1 70
+#define WHITE_PD_L1 450
+#define BLACK_PD_L2 45
+#define WHITE_PD_L2 320
+
+#define BLACK_COLOR 3200
+#define WHITE_COLOR 9500
 
 typedef struct{
 	uint8_t color;
 	float line;
 } SensorData;
 
-Adafruit_NeoPixel pixel(1, LEDC, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel pixel(2, LEDC, NEO_GRB + NEO_KHZ800);
 
 void enableSensorLED(uint8_t f)
 {
@@ -49,7 +54,6 @@ uint16_t convMotorPWM(uint8_t max_pwm, float v){
 	return((uint16_t)(max_pwm * v));
 }
 
-// Fix motor direction on PCB mount
 // vL/vR : -1 - +1 / +=FWD, -=BWD
 void setMotorSpeed(float vL, float vR)
 {
@@ -60,10 +64,10 @@ void setMotorSpeed(float vL, float vR)
 		analogWrite(L_A, 0); analogWrite(L_B, -convMotorPWM(MAX_PWM_L, vL));
 	}
 	if (vR > 0){
-		analogWrite(R_A, 0); analogWrite(R_B, convMotorPWM(MAX_PWM_R, vR));
+		analogWrite(R_A, convMotorPWM(MAX_PWM_R, vR));	analogWrite(R_B, 0);
 	}
 	else{
-		analogWrite(R_A, -convMotorPWM(MAX_PWM_R, vR));	analogWrite(R_B, 0);
+		analogWrite(R_A, 0); analogWrite(R_B, -convMotorPWM(MAX_PWM_R, vR));
 	}
 }
 
@@ -106,16 +110,9 @@ uint8_t classify(float R, float G, float B) {
 		else return(COLOR_BLACK);
 }
 
-// PD_BLACK(250) - PD_WHITE(900) <-> 1.0 - 0.0
-float lineValue(uint16_t val, uint8_t type){
+// BLACK(1.0) - WHITE(0.0)
+float lineValue(uint16_t val, uint16_t vBlack, uint16_t vWhite){
 	float v;
-	uint16_t vBlack, vWhite;
-	if (type == 0){
-		vBlack = BLACK_PD; vWhite = WHITE_PD;
-	}
-	else{
-		vBlack = BLACK_COLOR; vWhite = WHITE_COLOR;
-	}
 	if (val < vBlack) v = 1.0;
 	else if (val > vWhite) v = 0.0;
 	else v = (float)(vWhite - val) / (float)(vWhite - vBlack);
@@ -149,10 +146,10 @@ SensorData readSensor(SensorData sd)
 	float s = 0.0;
 	float v;
 	sd.line = 0.0;
-	v = lineValue(analogRead(PD_L2), TYPE_PD); sd.line += v * (-2); s += v;
-	v = lineValue(analogRead(PD_L1), TYPE_PD); sd.line += v * (-1); s += v;
-	v = lineValue(analogRead(PD_R1), TYPE_PD); sd.line += v * (+1); s += v;
-	v = lineValue(analogRead(PD_R2), TYPE_PD); sd.line += v * (+2); s += v;
+	v = lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2); sd.line += v * (-2); s += v;
+	v = lineValue(analogRead(PD_L1), BLACK_PD_L1, WHITE_PD_L1); sd.line += v * (-1); s += v;
+	v = lineValue(analogRead(PD_R1), BLACK_PD_R1, WHITE_PD_R1); sd.line += v * (+1); s += v;
+	v = lineValue(analogRead(PD_R2), BLACK_PD_R2, WHITE_PD_R2); sd.line += v * (+2); s += v;
 
 	sensorR = RGBWSensor.getRed();
 	sensorG = RGBWSensor.getGreen();
@@ -184,14 +181,14 @@ SensorData readSensor(SensorData sd)
  	Serial.print(analogRead(PD_R1)); Serial.print(',');
  	Serial.print(analogRead(PD_L1)); Serial.print(',');
  	Serial.print(analogRead(PD_L2)); Serial.print(',');
-	Serial.print(lineValue(analogRead(PD_R2), TYPE_PD)); Serial.print(',');
-	Serial.print(lineValue(analogRead(PD_R1), TYPE_PD)); Serial.print(',');
-	Serial.print(lineValue(analogRead(PD_L1), TYPE_PD)); Serial.print(',');
-	Serial.print(lineValue(analogRead(PD_L2), TYPE_PD)); Serial.print(',');
-	if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, TYPE_COLOR));
+	Serial.print(lineValue(analogRead(PD_R2), BLACK_PD_R2, WHITE_PD_R2)); Serial.print(',');
+	Serial.print(lineValue(analogRead(PD_R1), BLACK_PD_R1, WHITE_PD_R1)); Serial.print(',');
+	Serial.print(lineValue(analogRead(PD_L1), BLACK_PD_L1, WHITE_PD_L1)); Serial.print(',');
+	Serial.print(lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2)); Serial.print(',');
+	if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
 	Serial.println(' ');
 #endif
-	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, TYPE_COLOR);	
+	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, BLACK_COLOR, WHITE_COLOR);	
 	if (s == 0.0) sd.line = -10.0;
 	else sd.line = sd.line / s;
 	return(sd);
@@ -203,17 +200,18 @@ uint8_t detectedColor, detectedLine;
 
 uint16_t tm = 0;
 
+uint8_t dir = 0;
 // every 10ms
 void timerISR()
 {
 /*
-	if (dir == 0) setMotorSpeed(0.2, 0.2);
-	else if (dir == 1) setMotorSpeed(0.3, 0.3);
-	else if (dir == 3) setMotorSpeed(-0.2, -0.2);
-	else if (dir == 4) setMotorSpeed(-0.3, -0.3);
+	if (dir == 0) setMotorSpeed(0.2, 0);
+	else if (dir == 1) setMotorSpeed(-0.2, 0);
+	else if (dir == 3) setMotorSpeed(0, 0.2);
+	else if (dir == 4) setMotorSpeed(0, -0.2);
 	else setMotorSpeed(0.0, 0.0);
 	tm++;
-	if (tm == 200){
+	if (tm == 100){
 		tm = 0;
 		dir = (dir + 1) % 6;
 	}
@@ -221,9 +219,16 @@ void timerISR()
 }
 
 float vL = 0.0, vR = 0.0;
-#define NORMAL_V 0.4
 #define MAX_V 1.0
 #define MIN_V 0.0
+
+#define N_BUF 64
+char buf[N_BUF];
+uint8_t pBuf = 0;
+uint8_t fLog = 0;
+uint8_t fMotion = 0;
+float Kp = 0.3;
+float normalV = 0.4;
 
 void setup() {
 	Serial.begin(115200);
@@ -240,7 +245,7 @@ void setup() {
 //  MsTimer2::set(10, timerISR); // every 10ms
 //  MsTimer2::set(100, timerISR);
 //  MsTimer2::start();
-	vL = NORMAL_V; vR = NORMAL_V;
+	vL = normalV; vR = normalV;
 }
 
 // ToDo: L&R motor calibration using straight move
@@ -256,45 +261,68 @@ void loop() {
 	// differential value of lineValue
 	float d_line = line - line_previous;
 	line_previous = line;
-
 	// P control
 	if (line < -5.0){
 		// seek for line
+			vL = normalV;
+			vR = normalV;
 	}
 	else{
-#define KP 0.8
+#define KP 0.3
 		if (line > 0.0){
 			// line at right, turn right
-			vL = NORMAL_V;
-			vR = NORMAL_V - KP * line;
+			vL = normalV;
+			vR = normalV - KP * line;
 		}
 		else if (line < 0.0){
 			// line at left, turn left
-			vL = NORMAL_V + KP * line;
-			vR = NORMAL_V;
+			vL = normalV + KP * line;
+			vR = normalV;
 		}
 		else{
-			vL = NORMAL_V;
-			vR = NORMAL_V;
+			vL = normalV;
+			vR = normalV;
 		}
 	}
-/*
 	// D control
-	vL += d_line * 0.1;
-	vR += d_line * 0.1;
-*/
+//	vL += d_line * 0.1;
+//	vR += d_line * 0.1;
 
 	if (vL > MAX_V) vL = MAX_V;
 	else if (vL < MIN_V) vL = MIN_V;
 	if (vR > MAX_V) vR = MAX_V;
 	else if (vR < MIN_V) vR = MIN_V;
-	setMotorSpeed(vL, vR);
-/*
-	Serial.print(line); Serial.print(' ');
-	Serial.print(vL); Serial.print(' '); Serial.print(vR); Serial.print(' '); 
-	Serial.println(detectedColor);
-*/
-	if (detectedColor != COLOR_WHITE && detectedColor != COLOR_BLACK){
-		Serial.println(detectedColor);
+
+	if (fLog == 1){
+		Serial.print(line); Serial.print(','); Serial.print(vL); Serial.print(','); Serial.println(vR);
+	}
+
+	if (fMotion == 1) setMotorSpeed(vL, vR);
+	else setMotorSpeed(0, 0);
+
+//	if (detectedColor != COLOR_WHITE && detectedColor != COLOR_BLACK){
+//		Serial.println(detectedColor);
+//	}
+	while(Serial.available()){
+		char c = Serial.read();
+		if (c == '\r' || c == '\n'){
+			buf[pBuf] = '\0';
+			pBuf = 0;
+			if (buf[0] == 'L') fLog = 1;
+			if (buf[0] == 'l') fLog = 0;
+			if (buf[0] == 'M') fMotion = 1;
+			if (buf[0] == 'm') fMotion = 0;
+			if (buf[0] == 'k'){
+				Kp = atof(&buf[1]);
+				Serial.println(Kp);
+			}
+			if (buf[0] == 'v'){
+				normalV = atof(&buf[1]);
+				Serial.println(normalV);
+			}
+		}
+		else{
+			buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0;
+		}
 	}
 }
