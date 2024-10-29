@@ -1,3 +1,36 @@
+// ToDo:
+// - color mark command
+// - UART command
+
+/* UART command
+RRxx turn right 90 degree
+RLxx turn left 90 degree
+Bxx go back xxcm
+Fxx go straight xxcm
+Zxx zig-zag xxcm
+Sxx skate xxcm
+BR stop
+*/
+
+/* color mark command
+RGB very slow
+RKR slow
+BKB fast
+BGB turbo
+RBR temporal stop
+GKR turn left at cross
+BKR go straight at cross
+BRG turn right at cross
+BRW U-turn
+GRG jump to left
+GBG jump straight
+RGR jump to right
+RGRG hurricane
+BKGR zig-zag
+GRGR spin
+RGKB go backard
+*/
+
 #include <Arduino.h>
 #include "Wire.h"
 #include "veml6040.h"
@@ -81,12 +114,18 @@ float vL = 0.0, vR = 0.0;
 #define N_BUF 64
 char buf[N_BUF];
 uint8_t pBuf = 0;
-uint8_t fLog = 0;
-uint8_t fMotion = 0;
+uint8_t fLineTrace = 0;
 uint8_t fDebug = 0;
 float Kp = 0.3;
 float Kd = 0.0;
 float normalV = 0.4;
+uint8_t tm1cm = 100; // [ms]
+uint8_t tm10deg = 100; // [ms]
+
+uint8_t nColorCmd = 0;
+#define MAX_COLOR_CMD 5
+uint8_t ColorCmd[MAX_COLOR_CMD];
+uint8_t pColorCmd = COLOR_WHITE;
 
 void setLED(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -139,21 +178,6 @@ SensorData readSensor(SensorData sd)
 	enableSensorLED(1);
 	delay(2);
 
-/*
-	uint16_t l2, l1, r1, r2;
-	l2 = analogRead(PD_L2);
-	l1 = analogRead(PD_L1);
-	r1 = analogRead(PD_R1);
-	r2 = analogRead(PD_R2);
-	Serial.print(l2); Serial.print(' ');
-	Serial.print(l1); Serial.print(' ');
-	Serial.print(r1); Serial.print(' ');
-	Serial.print(r2); Serial.print('/');
-	Serial.print(lineValue(l2)); Serial.print(' ');
-	Serial.print(lineValue(l1)); Serial.print(' ');
-	Serial.print(lineValue(r1)); Serial.print(' ');
-	Serial.print(lineValue(r2)); Serial.println("");
-*/
 	float s = 0.0;
 	float v;
 	sd.line = 0.0;
@@ -202,6 +226,7 @@ SensorData readSensor(SensorData sd)
 		if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
 		Serial.print(':'); Serial.print(sd.line);
 		Serial.print('/'); Serial.println(sd.color);
+		Serial.print('|'); Serial.print(vL); Serial.print(','); Serial.println(vR);
 	}
 	return(sd);
 }
@@ -210,24 +235,9 @@ uint8_t detectedColor, detectedLine;
 
 // speed=2cm/s, mark=3mm -> 150ms
 
-uint16_t tm = 0;
-uint8_t dir = 0;
-
 // every 10ms
 void timerISR()
 {
-/*
-	if (dir == 0) setMotorSpeed(0.2, 0);
-	else if (dir == 1) setMotorSpeed(-0.2, 0);
-	else if (dir == 3) setMotorSpeed(0, 0.2);
-	else if (dir == 4) setMotorSpeed(0, -0.2);
-	else setMotorSpeed(0.0, 0.0);
-	tm++;
-	if (tm == 100){
-		tm = 0;
-		dir = (dir + 1) % 6;
-	}
-*/
 }
 
 void setup() {
@@ -251,68 +261,139 @@ void setup() {
 
 float line_previous = 0.0;
 
+uint16_t getParam(char *s){
+	if (s[0] >= '0' && s[0] <= '9') return(atoi(s));
+	else return(0);
+}
+
 void loop() {
 	SensorData sd;
 	sd = readSensor(sd);
 	detectedColor = sd.color;
-	float line = sd.line;
 
+	float line = sd.line;
 	// differential value of lineValue
 	float d_line = line - line_previous;
 	line_previous = line;
-	// P control
-	if (line < -5.0){
-		// seek for line
-			vL = normalV;
-			vR = normalV;
-	}
-	else{
-#define KP 0.3
-		if (line > 0.0){
-			// line at right, turn right
-			vL = normalV;
-			vR = normalV - KP * line;
+
+	if (fLineTrace == 1){
+		if (sd.color == COLOR_BLACK && pColorCmd != COLOR_BLACK){
+			// end of color command
+			Serial.print(nColorCmd); Serial.print(':'); 
+			for (uint8_t i = 0; i < nColorCmd; i++) Serial.print(ColorCmd[i]);
+			Serial.println("");
+			// execute motion
 		}
-		else if (line < 0.0){
-			// line at left, turn left
-			vL = normalV + KP * line;
-			vR = normalV;
+		if (sd.color != pColorCmd){
+			// color mark changed
+			nColorCmd++;
+			if (nColorCmd == MAX_COLOR_CMD){
+				// color command buffer full, ignore buffer
+				nColorCmd = 0;
+			}
+		}
+		ColorCmd[nColorCmd] = sd.color;
+		pColorCmd = sd.color;
+
+		// P control
+		if (line < -5.0){
+			// seek for line
+				vL = normalV; vR = normalV;
 		}
 		else{
-			vL = normalV;
-			vR = normalV;
+			if (line > 0.0){
+				// line at right, turn right
+				vL = normalV;
+				vR = normalV - Kp * line;
+			}
+			else if (line < 0.0){
+				// line at left, turn left
+				vL = normalV + Kp * line;
+				vR = normalV;
+			}
+			else{
+				vL = normalV;
+				vR = normalV;
+			}
 		}
-	}
-	// D control
-	vL += d_line * Kd;
-	vR += d_line * Kd;
-
-	if (vL > MAX_V) vL = MAX_V;
-	else if (vL < MIN_V) vL = MIN_V;
-	if (vR > MAX_V) vR = MAX_V;
-	else if (vR < MIN_V) vR = MIN_V;
-
-	if (fLog == 1){
-		Serial.print(line); Serial.print(','); Serial.print(vL); Serial.print(','); Serial.println(vR);
+		// D control
+		vL += d_line * Kd;
+		vR += d_line * Kd;
+		if (vL > MAX_V) vL = MAX_V;
+		else if (vL < MIN_V) vL = MIN_V;
+		if (vR > MAX_V) vR = MAX_V;
+		else if (vR < MIN_V) vR = MIN_V;
+		setMotorSpeed(vL, vR);
 	}
 
-	if (fMotion == 1) setMotorSpeed(vL, vR);
-	else setMotorSpeed(0, 0);
-
+	uint16_t param;
 	while(Serial.available()){
 		char c = Serial.read();
 		if (c == '\r' || c == '\n'){
 			buf[pBuf] = '\0';
 			pBuf = 0;
-			if (buf[0] == 'L') fLog = 1;
-			if (buf[0] == 'l') fLog = 0;
-			if (buf[0] == 'M') fMotion = 1;
-			if (buf[0] == 'm') fMotion = 0;
+			if (buf[0] == 'T') fLineTrace = 1;
+			if (buf[0] == 't') fLineTrace = 0;
 			if (buf[0] == 'D') fDebug = 1;
 			if (buf[0] == 'd') fDebug = 0;
 			if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
 			if (buf[0] == 'K'){ Kd = atof(&buf[1]); Serial.println(Kd); }
 			if (buf[0] == 'v'){ normalV = atof(&buf[1]); Serial.println(normalV); }
+			if (buf[0] == 'f'){ tm1cm = atoi(&buf[1]); Serial.println(tm1cm); }
+			if (buf[0] == 'g'){ tm10deg = atoi(&buf[1]); Serial.println(tm10deg); }
+			// UART command
+			if (buf[0] == 'R'){
+				if (buf[1] == 'R'){
+					// RRxx turn right xx degree
+					fLineTrace = 0;
+					param = getParam(buf+2);
+					Serial.println(param);
+					setMotorSpeed(normalV, -normalV);
+					delay(tm10deg * param);
+					setMotorSpeed(0, 0);
+				}
+				else if (buf[1] == 'L'){
+					// RLxx turn left xx degree
+					fLineTrace = 0;
+					param = getParam(buf+2);
+					setMotorSpeed(-normalV, normalV);
+					delay(tm10deg * param);
+					setMotorSpeed(0, 0);
+				}
+			}
+			if (buf[0] == 'B'){
+				if (buf[1] == 'R'){
+					// BR  stop
+					fLineTrace = 0;
+					setMotorSpeed(0, 0);
+				}
+				else if (buf[1] >= '0' && buf[1] <= '9'){
+					// Bxx go back xxcm
+					fLineTrace = 0;
+					param = getParam(buf+1);
+					setMotorSpeed(-normalV, -normalV);
+					delay(tm1cm * param);
+					setMotorSpeed(0, 0);
+				}	
+			}
+			if (buf[0] == 'F'){
+				// Fxx go straight xxcm
+					fLineTrace = 0;
+				param = getParam(buf+1);
+					setMotorSpeed(normalV, normalV);
+					delay(tm1cm * param);
+					setMotorSpeed(0, 0);
+			}
+			if (buf[0] == 'Z'){
+				// Zxx zig-zag xxcm
+				fLineTrace = 0;
+				param = getParam(buf+1);
+			}
+			if (buf[0] == 'S'){
+				// Sxx skate xxcm
+				fLineTrace = 0;
+				param = getParam(buf+1);
+			}
 		}
 		else{ buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0; }
 	}
