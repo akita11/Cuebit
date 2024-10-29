@@ -18,17 +18,21 @@ VEML6040 RGBWSensor;
 #define PD_L1 A1
 #define PD_L2 A0
 
-#define BLACK_PD_R2 50
-#define WHITE_PD_R2 400
-#define BLACK_PD_R1 50
-#define WHITE_PD_R1 400
-#define BLACK_PD_L1 50
-#define WHITE_PD_L1 400
-#define BLACK_PD_L2 50
-#define WHITE_PD_L2 400
+//#define DEBUG_COLOR
 
-#define BLACK_COLOR 1800
-#define WHITE_COLOR 8000
+#define TYPE_PD 0
+#define TYPE_COLOR 1
+#define BLACK_PD_R2 70
+#define WHITE_PD_R2 490
+#define BLACK_PD_R1 45
+#define WHITE_PD_R1 320
+#define BLACK_PD_L1 70
+#define WHITE_PD_L1 450
+#define BLACK_PD_L2 45
+#define WHITE_PD_L2 320
+
+#define BLACK_COLOR 3200
+#define WHITE_COLOR 9500
 
 typedef struct{
 	uint8_t color;
@@ -74,51 +78,36 @@ void setMotorSpeed(float vL, float vR)
 #define COLOR_GREEN 4
 #define COLOR_BLUE  5
 
-float vL = 0.0, vR = 0.0;
-#define MAX_V 1.0
-#define MIN_V 0.0
-
-#define N_BUF 64
-char buf[N_BUF];
-uint8_t pBuf = 0;
-uint8_t fLog = 0;
-uint8_t fMotion = 0;
-uint8_t fDebug = 0;
-float Kp = 0.3;
-float Kd = 0.0;
-float normalV = 0.4;
-
 void setLED(uint8_t r, uint8_t g, uint8_t b)
 {
-	pixel.setPixelColor(0,  pixel.Color(r, g, b)); pixel.setPixelColor(1,  pixel.Color(r, g, b)); pixel.show();
+	pixel.setPixelColor(0,  pixel.Color(r, g, b)); pixel.show();
 }
 
 uint8_t classify(float R, float G, float B) {
-	// SVM model on 241026
-	float coeff[4][3] = {
-	  {0.81998, -0.26535, 0.29090}, // BK
-	  {1.27892, -0.86404, -0.78414}, // R
- 		{-0.61668, 0.67990, -1.01109}, // G
-  	{-1.48221, 0.44949, 1.50433} // B
-	};
+    float coef[4][3] = {
+			{1.244, -0.525, -0.113},
+			{-0.723, 0.737, -0.366},
+			{-0.051, -0.199, 0.314},
+			{-0.0012, 0.0968, -0.163}
+    };
+    
+    float intercepts[4] = {-28.665, 7.005, -2.222, 2.364};
 
-	float intercept[4] = {-22.1684, 19.8273, 21.5242, -19.1831};
+    float decision_values[4];
+    for (int i = 0; i < 4; i++) {
+        decision_values[i] = coef[i][0] * R + coef[i][1] * G + coef[i][2] * B + intercepts[i];
+    }
 
-	float decision_values[4];
-	for (int i = 0; i < 4; i++) {
-		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + intercept[i];
-	}
-
-	int max_index = 0;
-	for (int i = 1; i < 4; i++) {
-  	if (decision_values[i] > decision_values[max_index]) {
-    	max_index = i;
-  	}
-  }
-	if (max_index == 0) return(COLOR_BLACK);
-	else if (max_index == 1) return(COLOR_RED);
-	else if (max_index == 2) return(COLOR_GREEN);
-	else return(COLOR_BLUE);
+    int max_index = 0;
+    for (int i = 1; i < 4; i++) {
+        if (decision_values[i] > decision_values[max_index]) {
+            max_index = i;
+        }
+    }
+		if (max_index == 0) return(COLOR_RED);
+		else if (max_index == 1) return(COLOR_GREEN);
+		else if (max_index == 2) return(COLOR_BLUE);
+		else return(COLOR_BLACK);
 }
 
 // BLACK(1.0) - WHITE(0.0)
@@ -183,26 +172,25 @@ SensorData readSensor(SensorData sd)
 	else if (sensorInfo == COLOR_GREEN) setLED(0, 20, 0);
 	else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 20);
 	else if (sensorInfo == COLOR_WHITE) setLED(20, 20, 20);
+#ifdef DEBUG_COLOR
+ 	Serial.print(sensorRf); Serial.print(",");
+ 	Serial.print(sensorGf); Serial.print(",");
+ 	Serial.print(sensorBf); Serial.print(",");
+ 	Serial.print(sensorW); Serial.print(",");
+ 	Serial.print(analogRead(PD_R2)); Serial.print(',');
+ 	Serial.print(analogRead(PD_R1)); Serial.print(',');
+ 	Serial.print(analogRead(PD_L1)); Serial.print(',');
+ 	Serial.print(analogRead(PD_L2)); Serial.print(',');
+	Serial.print(lineValue(analogRead(PD_R2), BLACK_PD_R2, WHITE_PD_R2)); Serial.print(',');
+	Serial.print(lineValue(analogRead(PD_R1), BLACK_PD_R1, WHITE_PD_R1)); Serial.print(',');
+	Serial.print(lineValue(analogRead(PD_L1), BLACK_PD_L1, WHITE_PD_L1)); Serial.print(',');
+	Serial.print(lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2)); Serial.print(',');
+	if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
+	Serial.println(' ');
+#endif
 	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, BLACK_COLOR, WHITE_COLOR);	
 	if (s == 0.0) sd.line = -10.0;
 	else sd.line = sd.line / s;
-	if (fDebug == 1){
-	 	Serial.print(sensorRf); Serial.print(",");
-	 	Serial.print(sensorGf); Serial.print(",");
-	 	Serial.print(sensorBf); Serial.print(",");
-	 	Serial.print(sensorW); Serial.print(",");
-	 	Serial.print(analogRead(PD_R2)); Serial.print(',');
-	 	Serial.print(analogRead(PD_R1)); Serial.print(',');
-	 	Serial.print(analogRead(PD_L1)); Serial.print(',');
-	 	Serial.print(analogRead(PD_L2)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_R2), BLACK_PD_R2, WHITE_PD_R2)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_R1), BLACK_PD_R1, WHITE_PD_R1)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_L1), BLACK_PD_L1, WHITE_PD_L1)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2)); Serial.print(',');
-		if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
-		Serial.print(':'); Serial.print(sd.line);
-		Serial.print('/'); Serial.println(sd.color);
-	}
 	return(sd);
 }
 
@@ -211,8 +199,8 @@ uint8_t detectedColor, detectedLine;
 // speed=2cm/s, mark=3mm -> 150ms
 
 uint16_t tm = 0;
-uint8_t dir = 0;
 
+uint8_t dir = 0;
 // every 10ms
 void timerISR()
 {
@@ -230,6 +218,18 @@ void timerISR()
 */
 }
 
+float vL = 0.0, vR = 0.0;
+#define MAX_V 1.0
+#define MIN_V 0.0
+
+#define N_BUF 64
+char buf[N_BUF];
+uint8_t pBuf = 0;
+uint8_t fLog = 0;
+uint8_t fMotion = 0;
+float Kp = 0.3;
+float normalV = 0.4;
+
 void setup() {
 	Serial.begin(115200);
   pixel.begin(); pixel.clear();
@@ -243,6 +243,7 @@ void setup() {
     while(1){ setLED(20, 0, 0); delay(100); setLED(0, 0, 0); delay(100); }
   }
 //  MsTimer2::set(10, timerISR); // every 10ms
+//  MsTimer2::set(100, timerISR);
 //  MsTimer2::start();
 	vL = normalV; vR = normalV;
 }
@@ -284,8 +285,8 @@ void loop() {
 		}
 	}
 	// D control
-	vL += d_line * Kd;
-	vR += d_line * Kd;
+//	vL += d_line * 0.1;
+//	vR += d_line * 0.1;
 
 	if (vL > MAX_V) vL = MAX_V;
 	else if (vL < MIN_V) vL = MIN_V;
@@ -299,6 +300,9 @@ void loop() {
 	if (fMotion == 1) setMotorSpeed(vL, vR);
 	else setMotorSpeed(0, 0);
 
+//	if (detectedColor != COLOR_WHITE && detectedColor != COLOR_BLACK){
+//		Serial.println(detectedColor);
+//	}
 	while(Serial.available()){
 		char c = Serial.read();
 		if (c == '\r' || c == '\n'){
@@ -308,12 +312,17 @@ void loop() {
 			if (buf[0] == 'l') fLog = 0;
 			if (buf[0] == 'M') fMotion = 1;
 			if (buf[0] == 'm') fMotion = 0;
-			if (buf[0] == 'D') fDebug = 1;
-			if (buf[0] == 'd') fDebug = 0;
-			if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
-			if (buf[0] == 'K'){ Kd = atof(&buf[1]); Serial.println(Kd); }
-			if (buf[0] == 'v'){ normalV = atof(&buf[1]); Serial.println(normalV); }
+			if (buf[0] == 'k'){
+				Kp = atof(&buf[1]);
+				Serial.println(Kp);
+			}
+			if (buf[0] == 'v'){
+				normalV = atof(&buf[1]);
+				Serial.println(normalV);
+			}
 		}
-		else{ buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0; }
+		else{
+			buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0;
+		}
 	}
 }
