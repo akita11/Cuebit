@@ -124,8 +124,10 @@ uint8_t tm10deg = 100; // [ms]
 
 uint8_t nColorCmd = 0;
 #define MAX_COLOR_CMD 5
-uint8_t ColorCmd[MAX_COLOR_CMD];
+uint8_t ColorCmds[MAX_COLOR_CMD];
 uint8_t pColorCmd = COLOR_WHITE;
+uint8_t pColor = COLOR_WHITE;
+uint8_t ColorCmd = COLOR_WHITE;
 
 void setLED(uint8_t r, uint8_t g, uint8_t b)
 {
@@ -266,6 +268,9 @@ uint16_t getParam(char *s){
 	else return(0);
 }
 
+uint8_t nColorContinuous = 0;
+uint8_t colorCmd = COLOR_WHITE;
+
 void loop() {
 	SensorData sd;
 	sd = readSensor(sd);
@@ -276,24 +281,33 @@ void loop() {
 	float d_line = line - line_previous;
 	line_previous = line;
 
+
 	if (fLineTrace == 1){
-		if (sd.color == COLOR_BLACK && pColorCmd != COLOR_BLACK){
-			// end of color command
-			Serial.print(nColorCmd); Serial.print(':'); 
-			for (uint8_t i = 0; i < nColorCmd; i++) Serial.print(ColorCmd[i]);
-			Serial.println("");
-			// execute motion
-		}
-		if (sd.color != pColorCmd){
-			// color mark changed
-			nColorCmd++;
-			if (nColorCmd == MAX_COLOR_CMD){
-				// color command buffer full, ignore buffer
-				nColorCmd = 0;
+		if (sd.color == pColor) nColorContinuous++;
+		else nColorContinuous = 0;
+		pColor = sd.color;
+		if (nColorContinuous > 5){
+			// color mark detected (spike noise removed)
+			ColorCmd = sd.color;
+			if (ColorCmd != pColorCmd){
+				// color mark changed
+				if (ColorCmd != COLOR_WHITE && ColorCmd != COLOR_BLACK){
+					ColorCmds[nColorCmd] = ColorCmd;
+					nColorCmd++;
+					if (nColorCmd == MAX_COLOR_CMD){
+						// color command buffer full, ignore buffer
+						nColorCmd = 0;
+					}
+				}
+				if ((ColorCmd == COLOR_BLACK || ColorCmd == COLOR_WHITE) && (pColorCmd != COLOR_BLACK && pColorCmd != COLOR_WHITE)){
+					// end of color command
+					Serial.print(nColorCmd); Serial.print(':'); for (uint8_t i = 0; i < nColorCmd; i++) Serial.print(ColorCmds[i]); Serial.println("");
+					nColorCmd = 0;
+					// execute motion
+				}
+				pColorCmd = ColorCmd;
 			}
 		}
-		ColorCmd[nColorCmd] = sd.color;
-		pColorCmd = sd.color;
 
 		// P control
 		if (line < -5.0){
@@ -332,8 +346,15 @@ void loop() {
 		if (c == '\r' || c == '\n'){
 			buf[pBuf] = '\0';
 			pBuf = 0;
-			if (buf[0] == 'T') fLineTrace = 1;
-			if (buf[0] == 't') fLineTrace = 0;
+			if (buf[0] == 'P'){
+				Serial.print("Kp(k)="); Serial.print(Kp);
+				Serial.print(" Kd(K)="); Serial.print(Kd); 
+				Serial.print(" V(v)="); Serial.print(normalV); 
+				Serial.print(" tm1cm(f)="); Serial.print(tm1cm); 
+				Serial.print(" tm10deg(g)="); Serial.println(tm10deg);
+			}
+			if (buf[0] == 'T') {fLineTrace = 1; pColorCmd = sd.color; nColorCmd = 0; }
+			if (buf[0] == 't') {fLineTrace = 0; setMotorSpeed(0, 0); }
 			if (buf[0] == 'D') fDebug = 1;
 			if (buf[0] == 'd') fDebug = 0;
 			if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
