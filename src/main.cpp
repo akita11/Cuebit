@@ -1,34 +1,30 @@
-// ToDo:
-// - color mark command
-// - UART command
-
-/* UART command
-RRxx turn right 90 degree
-RLxx turn left 90 degree
-Bxx go back xxcm
-Fxx go straight xxcm
+/* micro:bit command
+$ enter micro:bit command mode
+# exit micro:bit command mode
+Rxx turn right(+)/left(-) xx degree
+Fxx go forward(+)/backward(-) xx cm
 Zxx zig-zag xxcm
 Sxx skate xxcm
-BR stop
+B stop
 */
 
 /* color mark command
-RGB very slow
-RKR slow
-BKB fast
-BGB turbo
-RBR temporal stop
-GKR turn left at cross
-BKR go straight at cross
-BRG turn right at cross
-BRW U-turn
-GRG jump to left
-GBG jump straight
-RGR jump to right
-RGRG hurricane
-BKGR zig-zag
-GRGR spin
-RGKB go backard
+*RGB very slow
+RGR slow (<- RKR)
+BGB fast (<- BKB)
+*BGB turbo
+*RBR temporal stop
+*GKR turn left at cross
+*BKR go straight at cross
+*BRG turn right at cross
+*BRW U-turn
+*GRG jump to left
+*GBG jump straight
+*RGR jump to right
+*RGRG hurricane
+*BKGR zig-zag
+*GRGR spin
+*RGKB go backard
 */
 
 #include <Arduino.h>
@@ -39,6 +35,19 @@ RGKB go backard
 
 // https://github.com/thewknd/VEML6040/
 VEML6040 RGBWSensor;
+
+float Kp = 1.0;
+float Kd = 0.0;
+uint8_t tm1cm = 100; // [ms]
+uint8_t tm10deg = 70; // [ms]
+#define vSlow 0.4
+#define vFast 0.7
+#define vNORMAL 0.5
+#define vVerySlow 0.3
+#define vVeryFast 0.8
+float normalV = vNORMAL;
+uint8_t fLineTrace = 1; // Line trace mode at power on
+uint8_t fDebug = 0;
 
 #define R_B 5 // PD5
 #define R_A 6 // PD6
@@ -51,21 +60,22 @@ VEML6040 RGBWSensor;
 #define PD_L1 A1
 #define PD_L2 A0
 
-#define BLACK_PD_R2 50
-#define WHITE_PD_R2 400
-#define BLACK_PD_R1 50
-#define WHITE_PD_R1 400
-#define BLACK_PD_L1 50
-#define WHITE_PD_L1 400
-#define BLACK_PD_L2 50
-#define WHITE_PD_L2 400
+#define BLACK_PD_R2 35
+#define WHITE_PD_R2 313
+#define BLACK_PD_R1 37
+#define WHITE_PD_R1 343
+#define BLACK_PD_L1 38
+#define WHITE_PD_L1 337
+#define BLACK_PD_L2 39
+#define WHITE_PD_L2 351
 
-#define BLACK_COLOR 1800
-#define WHITE_COLOR 8000
+#define BLACK_COLOR 3200
+#define WHITE_COLOR 10000
 
 typedef struct{
 	uint8_t color;
 	float line;
+	float width;
 } SensorData;
 
 Adafruit_NeoPixel pixel(2, LEDC, NEO_GRB + NEO_KHZ800);
@@ -106,6 +116,7 @@ void setMotorSpeed(float vL, float vR)
 #define COLOR_RED	  3
 #define COLOR_GREEN 4
 #define COLOR_BLUE  5
+#define COLOR_CROSS 6
 
 float vL = 0.0, vR = 0.0;
 #define MAX_V 1.0
@@ -114,17 +125,10 @@ float vL = 0.0, vR = 0.0;
 #define N_BUF 64
 char buf[N_BUF];
 uint8_t pBuf = 0;
-uint8_t fLineTrace = 0;
-uint8_t fDebug = 0;
-float Kp = 0.3;
-float Kd = 0.0;
-float normalV = 0.4;
-uint8_t tm1cm = 100; // [ms]
-uint8_t tm10deg = 100; // [ms]
 
 uint8_t nColorCmd = 0;
-#define MAX_COLOR_CMD 5
-uint8_t ColorCmds[MAX_COLOR_CMD];
+#define MAX_COLOR_CMD 10
+char ColorCmds[MAX_COLOR_CMD];
 uint8_t pColorCmd = COLOR_WHITE;
 uint8_t pColor = COLOR_WHITE;
 uint8_t ColorCmd = COLOR_WHITE;
@@ -135,19 +139,18 @@ void setLED(uint8_t r, uint8_t g, uint8_t b)
 }
 
 uint8_t classify(float R, float G, float B) {
-	// SVM model on 241026
+	// SVM model on 241105
 	float coeff[4][3] = {
-	  {0.81998, -0.26535, 0.29090}, // BK
-	  {1.27892, -0.86404, -0.78414}, // R
- 		{-0.61668, 0.67990, -1.01109}, // G
-  	{-1.48221, 0.44949, 1.50433} // B
+  	{ 0.1129,  0.0743, -0.0001 }, // K
+  	{ 2.9690, -0.9396,  0.4897 }, // R
+  	{-1.3199,  1.7235, -0.9846 }, // G
+  	{-1.9934,  0.5089,  1.5674 } // B
 	};
-
-	float intercept[4] = {-22.1684, 19.8273, 21.5242, -19.1831};
+	float intercepts[4] = { -7.7428, -93.6174, -3.8712, -5.7054 };
 
 	float decision_values[4];
 	for (int i = 0; i < 4; i++) {
-		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + intercept[i];
+		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + intercepts[i];
 	}
 
 	int max_index = 0;
@@ -209,9 +212,11 @@ SensorData readSensor(SensorData sd)
 	else if (sensorInfo == COLOR_GREEN) setLED(0, 20, 0);
 	else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 20);
 	else if (sensorInfo == COLOR_WHITE) setLED(20, 20, 20);
+
 	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, BLACK_COLOR, WHITE_COLOR);	
 	if (s == 0.0) sd.line = -10.0;
 	else sd.line = sd.line / s;
+	sd.width = s;
 	if (fDebug == 1){
 	 	Serial.print(sensorRf); Serial.print(",");
 	 	Serial.print(sensorGf); Serial.print(",");
@@ -227,7 +232,8 @@ SensorData readSensor(SensorData sd)
 		Serial.print(lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2)); Serial.print(',');
 		if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
 		Serial.print(':'); Serial.print(sd.line);
-		Serial.print('/'); Serial.println(sd.color);
+		Serial.print(':'); Serial.println(sd.width);
+		Serial.print('/'); Serial.print(sd.color);
 		Serial.print('|'); Serial.print(vL); Serial.print(','); Serial.println(vR);
 	}
 	return(sd);
@@ -263,36 +269,44 @@ void setup() {
 
 float line_previous = 0.0;
 
-uint16_t getParam(char *s){
-	if (s[0] >= '0' && s[0] <= '9') return(atoi(s));
+int16_t getParam(char *s){
+	if ((s[0] >= '0' && s[0] <= '9') || s[0] == '-' ) return(atoi(s));
 	else return(0);
 }
 
 uint8_t nColorContinuous = 0;
 uint8_t colorCmd = COLOR_WHITE;
 
+uint8_t fCross = 0;
+
 void loop() {
-	SensorData sd;
-	sd = readSensor(sd);
-	detectedColor = sd.color;
-
-	float line = sd.line;
-	// differential value of lineValue
-	float d_line = line - line_previous;
-	line_previous = line;
-
-
 	if (fLineTrace == 1){
+		SensorData sd;
+		sd = readSensor(sd);
+		detectedColor = sd.color;
+
+		float line = sd.line;
+		// differential value of lineValue
+		float d_line = line - line_previous;
+		line_previous = line;
+
+		// color command detection	
+#define COLOR_MARK_TH 10
 		if (sd.color == pColor) nColorContinuous++;
-		else nColorContinuous = 0;
+		else{
+//		if (nColorContinuous > COLOR_MARK_TH){
+//			Serial.print(pColor); Serial.print(':'); Serial.println(nColorContinuous);
+//		}
+			nColorContinuous = 0;
+		}
 		pColor = sd.color;
-		if (nColorContinuous > 5){
+		if (nColorContinuous > COLOR_MARK_TH){
 			// color mark detected (spike noise removed)
 			ColorCmd = sd.color;
 			if (ColorCmd != pColorCmd){
 				// color mark changed
 				if (ColorCmd != COLOR_WHITE && ColorCmd != COLOR_BLACK){
-					ColorCmds[nColorCmd] = ColorCmd;
+					ColorCmds[nColorCmd] = '0' + ColorCmd;
 					nColorCmd++;
 					if (nColorCmd == MAX_COLOR_CMD){
 						// color command buffer full, ignore buffer
@@ -300,10 +314,21 @@ void loop() {
 					}
 				}
 				if ((ColorCmd == COLOR_BLACK || ColorCmd == COLOR_WHITE) && (pColorCmd != COLOR_BLACK && pColorCmd != COLOR_WHITE)){
+					ColorCmds[nColorCmd] = '\0';
 					// end of color command
-					Serial.print(nColorCmd); Serial.print(':'); for (uint8_t i = 0; i < nColorCmd; i++) Serial.print(ColorCmds[i]); Serial.println("");
+//					Serial.print(nColorCmd); Serial.print('*'); Serial.println(ColorCmds);
+					if (nColorCmd >= 3){
+						// execute motion
+						if (strncmp(ColorCmds, "343", 3) == 0){
+							Serial.println("CMD:slow");
+							normalV = 0.3;
+						}
+						if (strncmp(ColorCmds, "545", 3) == 0){
+							Serial.println("CMD:fast");
+							normalV = 0.6;
+						}
+					}
 					nColorCmd = 0;
-					// execute motion
 				}
 				pColorCmd = ColorCmd;
 			}
@@ -338,11 +363,24 @@ void loop() {
 		if (vR > MAX_V) vR = MAX_V;
 		else if (vR < MIN_V) vR = MIN_V;
 		setMotorSpeed(vL, vR);
+
+		// cross detection
+#define LINE_CROSS_TH 3.0
+		if (sd.width > LINE_CROSS_TH){
+			if (fCross == 0){
+				fCross = 1;
+				Serial.println("cross");
+				fLineTrace = 0;
+				setMotorSpeed(0, 0);
+			}
+		}
+		else fCross = 0;
 	}
 
-	uint16_t param;
+	int16_t param;
 	while(Serial.available()){
 		char c = Serial.read();
+		if (c > 0){ // ignore non-ASCII characters
 		if (c == '\r' || c == '\n'){
 			buf[pBuf] = '\0';
 			pBuf = 0;
@@ -353,7 +391,7 @@ void loop() {
 				Serial.print(" tm1cm(f)="); Serial.print(tm1cm); 
 				Serial.print(" tm10deg(g)="); Serial.println(tm10deg);
 			}
-			if (buf[0] == 'T') {fLineTrace = 1; pColorCmd = sd.color; nColorCmd = 0; }
+			if (buf[0] == 'T') {fLineTrace = 1; pColorCmd = COLOR_WHITE; nColorCmd = 0; }
 			if (buf[0] == 't') {fLineTrace = 0; setMotorSpeed(0, 0); }
 			if (buf[0] == 'D') fDebug = 1;
 			if (buf[0] == 'd') fDebug = 0;
@@ -362,60 +400,66 @@ void loop() {
 			if (buf[0] == 'v'){ normalV = atof(&buf[1]); Serial.println(normalV); }
 			if (buf[0] == 'f'){ tm1cm = atoi(&buf[1]); Serial.println(tm1cm); }
 			if (buf[0] == 'g'){ tm10deg = atoi(&buf[1]); Serial.println(tm10deg); }
-			// UART command
+			// micro:bit command
+			if (buf[0] == '$'){
+				Serial.println("enter micro:bit command mode");
+				fLineTrace = 0;
+				setMotorSpeed(0, 0);
+				setLED(20, 0, 20); // purple
+			}
+			if (buf[0] == '#'){
+				Serial.println("exit micro:bit command mode");
+				fLineTrace = 1;
+				setLED(0, 0, 0); // purple
+			}
 			if (buf[0] == 'R'){
-				if (buf[1] == 'R'){
-					// RRxx turn right xx degree
-					fLineTrace = 0;
-					param = getParam(buf+2);
-					Serial.println(param);
-					setMotorSpeed(normalV, -normalV);
-					delay(tm10deg * param);
-					setMotorSpeed(0, 0);
+				// Rxx turn right(+) or left(-) xx degree
+				fLineTrace = 0;
+				param = getParam(buf+1);
+				if (param >0){
+					setMotorSpeed(vNORMAL, -vNORMAL);
+					delay(tm10deg * param / 10);
 				}
-				else if (buf[1] == 'L'){
-					// RLxx turn left xx degree
-					fLineTrace = 0;
-					param = getParam(buf+2);
-					setMotorSpeed(-normalV, normalV);
-					delay(tm10deg * param);
-					setMotorSpeed(0, 0);
+				else{
+					setMotorSpeed(-vNORMAL, vNORMAL);
+					delay(tm10deg * -(param) / 10);
 				}
+				setMotorSpeed(0, 0);
 			}
 			if (buf[0] == 'B'){
-				if (buf[1] == 'R'){
-					// BR  stop
-					fLineTrace = 0;
-					setMotorSpeed(0, 0);
-				}
-				else if (buf[1] >= '0' && buf[1] <= '9'){
-					// Bxx go back xxcm
-					fLineTrace = 0;
-					param = getParam(buf+1);
-					setMotorSpeed(-normalV, -normalV);
-					delay(tm1cm * param);
-					setMotorSpeed(0, 0);
-				}	
+				// B stop
+				// ToDo: interrupt other command
+				fLineTrace = 0;
+				setMotorSpeed(0, 0);
 			}
 			if (buf[0] == 'F'){
 				// Fxx go straight xxcm
-					fLineTrace = 0;
+				fLineTrace = 0;
 				param = getParam(buf+1);
-					setMotorSpeed(normalV, normalV);
+				if (param > 0){
+					setMotorSpeed(vNORMAL, vNORMAL);
 					delay(tm1cm * param);
-					setMotorSpeed(0, 0);
+				}
+				else{
+					setMotorSpeed(-vNORMAL, -vNORMAL);
+					delay(tm1cm * -(param));
+				}
+				setMotorSpeed(0, 0);
 			}
 			if (buf[0] == 'Z'){
 				// Zxx zig-zag xxcm
 				fLineTrace = 0;
 				param = getParam(buf+1);
+				// ToDo: implement zig-zag motion
 			}
 			if (buf[0] == 'S'){
 				// Sxx skate xxcm
 				fLineTrace = 0;
 				param = getParam(buf+1);
+				// ToDo: implement skate motion
 			}
 		}
 		else{ buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0; }
+		}
 	}
 }
