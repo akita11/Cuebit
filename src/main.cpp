@@ -40,9 +40,9 @@ float Kp = 1.0;
 float Kd = 0.0;
 uint8_t tm1cm = 100; // [ms]
 uint8_t tm10deg = 70; // [ms]
-#define vSlow 0.4
-#define vFast 0.7
-#define vNORMAL 0.5
+#define vSlow 0.3
+#define vFast 1.0
+#define vNORMAL 0.4
 #define vVerySlow 0.3
 #define vVeryFast 0.8
 float normalV = vNORMAL;
@@ -363,7 +363,7 @@ void loop() {
 		if (vR > MAX_V) vR = MAX_V;
 		else if (vR < MIN_V) vR = MIN_V;
 		setMotorSpeed(vL, vR);
-
+/*
 		// cross detection
 #define LINE_CROSS_TH 3.0
 		if (sd.width > LINE_CROSS_TH){
@@ -375,8 +375,8 @@ void loop() {
 			}
 		}
 		else fCross = 0;
+*/
 	}
-
 	int16_t param;
 	while(Serial.available()){
 		char c = Serial.read();
