@@ -46,7 +46,7 @@ uint8_t tm10deg = 70; // [ms]
 #define vVerySlow 0.3
 #define vVeryFast 0.8
 float normalV = vNORMAL;
-uint8_t fLineTrace = 1; // Line trace mode at power on
+uint8_t fLineTrace = 0; // Line trace mode at power on
 uint8_t fDebug = 0;
 
 #define R_B 5 // PD5
@@ -232,7 +232,7 @@ SensorData readSensor(SensorData sd)
 		Serial.print(lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2)); Serial.print(',');
 		if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
 		Serial.print(':'); Serial.print(sd.line);
-		Serial.print(':'); Serial.println(sd.width);
+		Serial.print(':'); Serial.print(sd.width);
 		Serial.print('/'); Serial.print(sd.color);
 		Serial.print('|'); Serial.print(vL); Serial.print(','); Serial.println(vR);
 	}
@@ -249,7 +249,7 @@ void timerISR()
 }
 
 void setup() {
-	Serial.begin(115200);
+	Serial.begin(9600);
   pixel.begin(); pixel.clear();
 	setLED(20, 0, 0);
 	setMotorSpeed(0.0, 0.0);
@@ -381,38 +381,38 @@ void loop() {
 	while(Serial.available()){
 		char c = Serial.read();
 		if (c > 0){ // ignore non-ASCII characters
-		if (c == '\r' || c == '\n'){
-			buf[pBuf] = '\0';
-			pBuf = 0;
-			if (buf[0] == 'P'){
-				Serial.print("Kp(k)="); Serial.print(Kp);
-				Serial.print(" Kd(K)="); Serial.print(Kd); 
-				Serial.print(" V(v)="); Serial.print(normalV); 
-				Serial.print(" tm1cm(f)="); Serial.print(tm1cm); 
-				Serial.print(" tm10deg(g)="); Serial.println(tm10deg);
-			}
-			if (buf[0] == 'T') {fLineTrace = 1; pColorCmd = COLOR_WHITE; nColorCmd = 0; }
-			if (buf[0] == 't') {fLineTrace = 0; setMotorSpeed(0, 0); }
-			if (buf[0] == 'D') fDebug = 1;
-			if (buf[0] == 'd') fDebug = 0;
-			if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
-			if (buf[0] == 'K'){ Kd = atof(&buf[1]); Serial.println(Kd); }
-			if (buf[0] == 'v'){ normalV = atof(&buf[1]); Serial.println(normalV); }
-			if (buf[0] == 'f'){ tm1cm = atoi(&buf[1]); Serial.println(tm1cm); }
-			if (buf[0] == 'g'){ tm10deg = atoi(&buf[1]); Serial.println(tm10deg); }
-			// micro:bit command
-			if (buf[0] == '$'){
+			if (c == '\r' || c == '\n'){
+				buf[pBuf] = '\0';
+				pBuf = 0;
+				if (buf[0] == 'P'){
+					Serial.print("Kp(k)="); Serial.print(Kp);
+					Serial.print(" Kd(K)="); Serial.print(Kd); 
+					Serial.print(" V(v)="); Serial.print(normalV); 
+					Serial.print(" tm1cm(f)="); Serial.print(tm1cm); 
+					Serial.print(" tm10deg(g)="); Serial.println(tm10deg);
+				}
+				if (buf[0] == 'T') {fLineTrace = 1; pColorCmd = COLOR_WHITE; nColorCmd = 0; }
+				if (buf[0] == 't') {fLineTrace = 0; setMotorSpeed(0, 0); }
+				if (buf[0] == 'D') fDebug = 1;
+				if (buf[0] == 'd') fDebug = 0;
+				if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
+				if (buf[0] == 'K'){ Kd = atof(&buf[1]); Serial.println(Kd); }
+				if (buf[0] == 'v'){ normalV = atof(&buf[1]); Serial.println(normalV); }
+				if (buf[0] == 'f'){ tm1cm = atoi(&buf[1]); Serial.println(tm1cm); }
+				if (buf[0] == 'g'){ tm10deg = atoi(&buf[1]); Serial.println(tm10deg); }
+				// micro:bit command
+				if (buf[0] == '$'){
 				Serial.println("enter micro:bit command mode");
 				fLineTrace = 0;
 				setMotorSpeed(0, 0);
 				setLED(20, 0, 20); // purple
 			}
-			if (buf[0] == '#'){
+				if (buf[0] == '#'){
 				Serial.println("exit micro:bit command mode");
 				fLineTrace = 1;
 				setLED(0, 0, 0); // purple
 			}
-			if (buf[0] == 'R'){
+				if (buf[0] == 'R'){
 				// Rxx turn right(+) or left(-) xx degree
 				fLineTrace = 0;
 				param = getParam(buf+1);
@@ -426,13 +426,13 @@ void loop() {
 				}
 				setMotorSpeed(0, 0);
 			}
-			if (buf[0] == 'B'){
+				if (buf[0] == 'B'){
 				// B stop
 				// ToDo: interrupt other command
 				fLineTrace = 0;
 				setMotorSpeed(0, 0);
 			}
-			if (buf[0] == 'F'){
+				if (buf[0] == 'F'){
 				// Fxx go straight xxcm
 				fLineTrace = 0;
 				param = getParam(buf+1);
@@ -446,20 +446,20 @@ void loop() {
 				}
 				setMotorSpeed(0, 0);
 			}
-			if (buf[0] == 'Z'){
+				if (buf[0] == 'Z'){
 				// Zxx zig-zag xxcm
 				fLineTrace = 0;
 				param = getParam(buf+1);
 				// ToDo: implement zig-zag motion
 			}
-			if (buf[0] == 'S'){
+				if (buf[0] == 'S'){
 				// Sxx skate xxcm
 				fLineTrace = 0;
 				param = getParam(buf+1);
 				// ToDo: implement skate motion
 			}
-		}
-		else{ buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0; }
+			}
+			else{ buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0; }
 		}
 	}
 }
