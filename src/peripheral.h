@@ -12,6 +12,7 @@
 typedef struct{
 	uint8_t color;
 	float line;
+	float line_previous;
 	float width;
 } SensorData;
 
