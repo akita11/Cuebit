@@ -7,13 +7,14 @@ float Kp = 1.0; // P gain for Line trace
 float Kd = 0.0; // D gain for Line trace
 uint8_t tm1cm = 100; // [ms]
 uint8_t tm10deg = 70; // [ms]
-#define vSlow 0.4
-#define vFast 1.0
-#define vNORMAL 0.6
-#define vVerySlow 0.3
-#define vVeryFast 0.8
+#define vNORMAL 0.3
+#define vSlow 0.2
+#define vFast 0.5
+#define vVerySlow 0.15
+#define vVeryFast 0.7
 float normalV = vNORMAL;
 float vL = 0.0, vR = 0.0; // left/right motor speed (0.0 - 1.0)
+uint8_t dirTrace = 0;
 
 // motion types in micro:bit cmd mode
 #define MOTION_NONE				0 
@@ -56,7 +57,6 @@ void setup() {
 	Serial.begin(9600);
 	init_peripheral();
   MsTimer2::set(10, timerISR); // every 10ms
-  MsTimer2::start();
 }
 
 // ToDo: L&R motor calibration using straight move
@@ -103,20 +103,20 @@ void loop() {
 				if ((ColorCmd == COLOR_BLACK || ColorCmd == COLOR_WHITE) && (pColorCmd != COLOR_BLACK && pColorCmd != COLOR_WHITE)){
 					ColorCmds[nColorCmd] = '\0';
 					// end of color command
-//					Serial.print(nColorCmd); Serial.print('*'); Serial.println(ColorCmds);
+					Serial.print(nColorCmd); Serial.print('*'); Serial.println(ColorCmds);
 					if (nColorCmd >= 3){
 						// execute motion
-						if (strncmp(ColorCmds, "343", 3) == 0){
+						if (strncmp(ColorCmds, "345", 3) == 0){
 							Serial.println("CMD:slow");
-							normalV = 0.3;
+							normalV = vSlow;
 						}
-						if (strncmp(ColorCmds, "545", 3) == 0){
+						if (strncmp(ColorCmds, "543", 3) == 0){
 							Serial.println("CMD:fast");
-							normalV = 0.6;
+							normalV = vFast;
 						}
 						if (strncmp(ColorCmds, "434", 3) == 0){
 							Serial.println("CMD:reverse");
-							normalV = -normalV;
+							dirTrace = 1- dirTrace;
 						}
 					}
 					nColorCmd = 0;
@@ -153,7 +153,8 @@ void loop() {
 		else if (vL < MIN_V) vL = MIN_V;
 		if (vR > MAX_V) vR = MAX_V;
 		else if (vR < MIN_V) vR = MIN_V;
-		setMotorSpeed(vL, vR);
+		if (dirTrace == 0) setMotorSpeed(vL, vR);
+		else setMotorSpeed(-vR, -vL);
 
 		// cross detection
 #define LINE_CROSS_TH 3.0
@@ -167,6 +168,7 @@ void loop() {
 	}
 	else{
 		// micro:bit command motion
+		enableSensorLED(0);
 		switch(fMotion){
 			case MOTION_NONE : setMotorSpeed(0, 0); break;
 			case MOTION_TURN_RIGHT:
@@ -218,16 +220,18 @@ void loop() {
 
 				// micro:bit command
 				if (buf[0] == '$'){
-				Serial.println("enter micro:bit command mode");
-				fLineTrace = 0;
-				setMotorSpeed(0, 0);
-				setLED(20, 0, 20); // purple
-			}
+					Serial.println("enter micro:bit command mode");
+					fLineTrace = 0;
+				  MsTimer2::start();
+					setMotorSpeed(0, 0);
+					setLED(20, 0, 20); // purple
+				}
 				if (buf[0] == '#'){
-				Serial.println("exit micro:bit command mode");
-				fLineTrace = 1;
-				setLED(0, 0, 0); // purple
-			}
+					Serial.println("exit micro:bit command mode");
+					fLineTrace = 1;
+				  MsTimer2::stop();
+					setLED(0, 0, 0); // black
+				}
 				if (buf[0] == 'R'){
 					// Rxx turn right(+) or left(-) xx degree
 					fLineTrace = 0;

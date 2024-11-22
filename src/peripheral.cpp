@@ -40,6 +40,7 @@ Adafruit_NeoPixel pixel(2, LEDC, NEO_GRB + NEO_KHZ800);
 void init_peripheral()
 {
   pixel.begin(); pixel.clear();
+	pinMode(LED_EN, OUTPUT);
 	setLED(20, 0, 0);
 	setMotorSpeed(0.0, 0.0);
 	enableSensorLED(0);
@@ -126,7 +127,7 @@ SensorData readSensor(SensorData sd)
 	uint16_t sensorR, sensorG, sensorB, sensorW;
 
 	enableSensorLED(1);
-	delay(2);
+//	delay(2);
 
 	float s = 0.0;
 	float v;
@@ -140,7 +141,7 @@ SensorData readSensor(SensorData sd)
 	sensorG = RGBWSensor.getGreen();
 	sensorB = RGBWSensor.getBlue();
 	sensorW = RGBWSensor.getWhite();
-	enableSensorLED(0);
+//	enableSensorLED(0);
 
 	// normalize
 	float sensorRf, sensorGf, sensorBf;
@@ -149,14 +150,15 @@ SensorData readSensor(SensorData sd)
 	sensorBf = (float)sensorB / (float)sensorW * 100.0;
 
 	if (sensorW > WHITE_COLOR) sensorInfo = COLOR_WHITE;
+	else if (sensorW < 5000) sensorInfo = COLOR_BLACK;
 	else sensorInfo = classify(sensorRf, sensorGf, sensorBf);
 
 	sd.color = sensorInfo;
 	if (sensorInfo == COLOR_BLACK) setLED(0, 0, 0);
-	else if (sensorInfo == COLOR_RED) setLED(20, 0, 0);
-	else if (sensorInfo == COLOR_GREEN) setLED(0, 20, 0);
-	else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 20);
-	else if (sensorInfo == COLOR_WHITE) setLED(20, 20, 20);
+	else if (sensorInfo == COLOR_RED) setLED(10, 0, 0);
+	else if (sensorInfo == COLOR_GREEN) setLED(0, 10, 0);
+	else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 10);
+	else if (sensorInfo == COLOR_WHITE) setLED(10, 10, 10);
 
 	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, BLACK_COLOR, WHITE_COLOR);	
 	if (s == 0.0) sd.line = -10.0;
