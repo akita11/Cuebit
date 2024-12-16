@@ -20,6 +20,8 @@ VEML6040 RGBWSensor;
 #define PD_L1 A1
 #define PD_L2 A0
 
+/*
+// for narrow sensor
 #define BLACK_PD_R2 35
 #define WHITE_PD_R2 313
 #define BLACK_PD_R1 37
@@ -28,9 +30,22 @@ VEML6040 RGBWSensor;
 #define WHITE_PD_L1 337
 #define BLACK_PD_L2 39
 #define WHITE_PD_L2 351
-
 #define BLACK_COLOR 3200
 #define WHITE_COLOR 10000
+*/
+
+// for wide sensor
+#define BLACK_PD_R2 42
+#define WHITE_PD_R2 360
+#define BLACK_PD_R1 38
+#define WHITE_PD_R1 290
+#define BLACK_PD_L1 47
+#define WHITE_PD_L1 370
+#define BLACK_PD_L2 43
+#define WHITE_PD_L2 330
+#define BLACK_COLOR 10000
+#define WHITE_COLOR 16000
+
 
 #define MAX_PWM_L 255
 #define MAX_PWM_R 255
