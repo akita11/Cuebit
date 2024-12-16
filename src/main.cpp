@@ -47,16 +47,31 @@ uint8_t pColor = COLOR_WHITE;
 uint8_t ColorCmd = COLOR_WHITE;
 uint8_t nColorContinuous = 0;
 
+double leftDevi = 1.0, rightDevi = 1.0;
+uint8_t tSkate = 0;
+#define SKATE_CYCLE 200 // [x 10ms]
+
+uint8_t stateZigzag = 0;
+#define ZIGZAG_STEP 10
+
 // every 10ms
 void timerISR()
 {
 	if (tm10ms > 0) tm10ms--;
+	if (fMotion == MOTION_SKATE){
+		leftDevi = 1.0 + 0.3 * sin((double)tSkate / (double)SKATE_CYCLE * 2 * 3.14);
+		rightDevi = 1.0 - 0.3 * sin((double)tSkate / (double)SKATE_CYCLE * 2 * 3.14);
+		tSkate = (tSkate + 1) %SKATE_CYCLE;
+	}
+	if (fMotion == MOTION_ZIGZAG){
+		stateZigzag = (stateZigzag + 1) % (ZIGZAG_STEP * 2)
+	}
 }
 
 void setup() {
 	Serial.begin(9600);
 	init_peripheral();
-  MsTimer2::set(10, timerISR); // every 10ms
+	MsTimer2::set(10, timerISR); // every 10ms
 }
 
 // ToDo: L&R motor calibration using straight move
@@ -155,7 +170,7 @@ void loop() {
 		else if (vR < MIN_V) vR = MIN_V;
 		if (dirTrace == 0) setMotorSpeed(vL, vR);
 		else setMotorSpeed(-vR, -vL);
-
+/*
 		// cross detection
 #define LINE_CROSS_TH 3.0
 		if (sd.width > LINE_CROSS_TH){
@@ -165,6 +180,7 @@ void loop() {
 			}
 		}
 		else fCross = 0;
+*/
 	}
 	else{
 		// micro:bit command motion
@@ -188,8 +204,13 @@ void loop() {
 				else{ setMotorSpeed(0, 0); fMotion = MOTION_NONE;}
 				break;
 			case MOTION_ZIGZAG:
+				if (stateZigzag == 0) setMotorSpeed(vNORMAL, -vNORMAL); // turn right
+				else if (stateZigzag == ZIGZAG_STEP) setMotorSpeed(-vNORMAL, vNORMAL); // turn right
+				else setMotorSpeed(vNORMAL, vNORMAL); break; // go straight
 				break;
 			case MOTION_SKATE:
+				if (tm10ms > 0) setMotorSpeed(vNORMAL * leftDevi, vNORMAL * rightDevi);
+				else{ setMotorSpeed(0, 0); fMotion = MOTION_NONE;}
 				break;
 		}
 	}
@@ -222,14 +243,14 @@ void loop() {
 				if (buf[0] == '$'){
 					Serial.println("enter micro:bit command mode");
 					fLineTrace = 0;
-				  MsTimer2::start();
+					MsTimer2::start();
 					setMotorSpeed(0, 0);
 					setLED(20, 0, 20); // purple
 				}
 				if (buf[0] == '#'){
 					Serial.println("exit micro:bit command mode");
 					fLineTrace = 1;
-				  MsTimer2::stop();
+					MsTimer2::stop();
 					setLED(0, 0, 0); // black
 				}
 				if (buf[0] == 'R'){
@@ -255,7 +276,7 @@ void loop() {
 					if (param > 0){
 						fMotion = MOTION_FWD;
 						tm10ms = tm1cm * param / 10;
-				}
+					}
 					else{
 						fMotion = MOTION_BWD;
 						tm10ms = tm1cm * (-param) / 10;
@@ -264,12 +285,16 @@ void loop() {
 				if (buf[0] == 'Z'){
 					// Zxx zig-zag xxcm
 					param = getParam(buf+1);
-					// ToDo: implement zig-zag motion
+					fMotion = MOTION_ZIGZAG;
+					stateZigzag = 0;
+					tm10ms = param; // tentative
 				}
-					if (buf[0] == 'S'){
+				if (buf[0] == 'S'){
 					// Sxx skate xxcm
 					param = getParam(buf+1);
-					// ToDo: implement skate motion
+					fMotion = MOTION_SKATE;
+					tSkate = 0;
+					tm10ms = param; // tentative
 				}
 			}
 			else{ buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0; }
