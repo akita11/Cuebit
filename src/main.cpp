@@ -49,10 +49,11 @@ uint8_t nColorContinuous = 0;
 
 double leftDevi = 1.0, rightDevi = 1.0;
 uint8_t tSkate = 0;
-#define SKATE_CYCLE 200 // [x 10ms]
+#define SKATE_CYCLE 100 // [x 10ms]
 
 uint8_t stateZigzag = 0;
-#define ZIGZAG_STEP 10
+#define ZIGZAG_STEP 100 // [x 10ms] of half cycle
+#define ZIGZAG_TURN 50 // [x 10ms] of turn time
 
 // every 10ms
 void timerISR()
@@ -61,10 +62,10 @@ void timerISR()
 	if (fMotion == MOTION_SKATE){
 		leftDevi = 1.0 + 0.3 * sin((double)tSkate / (double)SKATE_CYCLE * 2 * 3.14);
 		rightDevi = 1.0 - 0.3 * sin((double)tSkate / (double)SKATE_CYCLE * 2 * 3.14);
-		tSkate = (tSkate + 1) %SKATE_CYCLE;
+		tSkate = (tSkate + 1) % SKATE_CYCLE;
 	}
 	if (fMotion == MOTION_ZIGZAG){
-		stateZigzag = (stateZigzag + 1) % (ZIGZAG_STEP * 2)
+		stateZigzag = (stateZigzag + 1) % (ZIGZAG_STEP * 2);
 	}
 }
 
@@ -123,11 +124,11 @@ void loop() {
 						// execute motion
 						if (strncmp(ColorCmds, "345", 3) == 0){
 							Serial.println("CMD:slow");
-							normalV = vSlow;
+//							normalV = vSlow;
 						}
 						if (strncmp(ColorCmds, "543", 3) == 0){
 							Serial.println("CMD:fast");
-							normalV = vFast;
+//							normalV = vFast;
 						}
 						if (strncmp(ColorCmds, "434", 3) == 0){
 							Serial.println("CMD:reverse");
@@ -204,13 +205,17 @@ void loop() {
 				else{ setMotorSpeed(0, 0); fMotion = MOTION_NONE;}
 				break;
 			case MOTION_ZIGZAG:
-				if (stateZigzag == 0) setMotorSpeed(vNORMAL, -vNORMAL); // turn right
-				else if (stateZigzag == ZIGZAG_STEP) setMotorSpeed(-vNORMAL, vNORMAL); // turn right
-				else setMotorSpeed(vNORMAL, vNORMAL); break; // go straight
+				if (tm10ms > 0){
+					if (stateZigzag >= 0 && stateZigzag < ZIGZAG_TURN) setMotorSpeed(vNORMAL, -vNORMAL); // turn right
+					else if (stateZigzag >= ZIGZAG_STEP && stateZigzag < ZIGZAG_STEP + ZIGZAG_TURN) setMotorSpeed(-vNORMAL, vNORMAL); // turn right
+					else setMotorSpeed(vNORMAL, vNORMAL); // go straight
+				}
+				else {setMotorSpeed(0, 0); fMotion = MOTION_NONE;}
 				break;
 			case MOTION_SKATE:
+//				Serial.print(tSkate); Serial.print(' '); Serial.print(vNORMAL*leftDevi); Serial.print(' '); Serial.println(vNORMAL*rightDevi);
 				if (tm10ms > 0) setMotorSpeed(vNORMAL * leftDevi, vNORMAL * rightDevi);
-				else{ setMotorSpeed(0, 0); fMotion = MOTION_NONE;}
+				else {setMotorSpeed(0, 0); fMotion = MOTION_NONE;}
 				break;
 		}
 	}

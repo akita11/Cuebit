@@ -35,15 +35,15 @@ VEML6040 RGBWSensor;
 */
 
 // for wide sensor
-#define BLACK_PD_R2 42
-#define WHITE_PD_R2 360
-#define BLACK_PD_R1 38
-#define WHITE_PD_R1 290
-#define BLACK_PD_L1 47
-#define WHITE_PD_L1 370
-#define BLACK_PD_L2 43
-#define WHITE_PD_L2 330
-#define BLACK_COLOR 10000
+#define BLACK_PD_R2 50
+#define WHITE_PD_R2 450
+#define BLACK_PD_R1 45
+#define WHITE_PD_R1 350
+#define BLACK_PD_L1 52
+#define WHITE_PD_L1 460
+#define BLACK_PD_L2 50
+#define WHITE_PD_L2 400
+#define BLACK_COLOR 11000
 #define WHITE_COLOR 16000
 
 
@@ -165,7 +165,7 @@ SensorData readSensor(SensorData sd)
 	sensorBf = (float)sensorB / (float)sensorW * 100.0;
 
 	if (sensorW > WHITE_COLOR) sensorInfo = COLOR_WHITE;
-	else if (sensorW < 5000) sensorInfo = COLOR_BLACK;
+	else if (sensorW < BLACK_COLOR) sensorInfo = COLOR_BLACK;
 	else sensorInfo = classify(sensorRf, sensorGf, sensorBf);
 
 	sd.color = sensorInfo;
@@ -176,7 +176,8 @@ SensorData readSensor(SensorData sd)
 	else if (sensorInfo == COLOR_WHITE) setLED(10, 10, 10);
 
 	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, BLACK_COLOR, WHITE_COLOR);	
-	if (s == 0.0) sd.line = -10.0;
+//	if (s == 0.0) sd.line = -10.0;
+	if (s <  0.5) sd.line = -10.0;
 	else sd.line = sd.line / s;
 	sd.width = s;
 	if (fDebug == 1){
