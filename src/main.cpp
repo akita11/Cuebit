@@ -25,6 +25,25 @@ uint8_t dirTrace = 0;
 #define MOTION_ZIGZAG			5
 #define MOTION_SKATE			6
 
+// color mark command (3=R / 4=G / 5=B)
+#define COLOR_CMD_VERY_SLOW        "435"
+#define COLOR_CMD_SLOW             "345"
+#define COLOR_CMD_FAST             "543"
+#define COLOR_CMD_VERY_FAST        "534"
+#define COLOR_CMD_PAUSE            "535"
+#define COLOR_CMD_LEFT_AT_CROSS    "354"
+#define COLOR_CMD_RIGHT_AT_CROSS   "353"
+#define COLOR_CMD_FORWARD_AT_CROSS "345"
+#define COLOR_CMD_UTURN            "535"
+#define COLOR_CMD_GO_BACK          "434"
+// pending commands
+//#define COLOR_CMD_JUMP_LEFT        ""
+//#define COLOR_CMD_JUMP_FORWARD     ""
+//#define COLOR_CMD_JUMP_RIGHT       ""
+//#define COLOR_CMD_JUMP_HURRICANE   ""
+//#define COLOR_CMD_ZIGZAG           ""
+//#define COLOR_CMD_SPIN             ""
+
 // flag for operation
 uint8_t fMotion = MOTION_NONE; // currently operating motion
 uint8_t fLineTrace = 1; // Line trace mode at power on
@@ -46,6 +65,12 @@ uint8_t pColorCmd = COLOR_WHITE;
 uint8_t pColor = COLOR_WHITE;
 uint8_t ColorCmd = COLOR_WHITE;
 uint8_t nColorContinuous = 0;
+
+uint8_t stateColorCmd = 0;
+#define COLOR_CMD_ST_PAUSE    1
+#define COLOR_CMD_ST_CROSS_LEFT  2
+#define COLOR_CMD_ST_CROSS_RIGHT 3
+#define COLOR_CMD_ST_UTURN       4
 
 double leftDevi = 1.0, rightDevi = 1.0;
 uint8_t tSkate = 0;
@@ -84,6 +109,15 @@ int16_t getParam(char *s){
 
 void loop() {
 	if (fLineTrace == 1){
+		if (stateColorCmd == COLOR_CMD_ST_PAUSE){
+			if (tm10ms > 0) setMotorSpeed(0, 0);
+			else stateColorCmd = 0;
+		}
+		else if (stateColorCmd = COLOR_CMD_UTURN){
+			if (tm10ms > 0) setMotorSpeed(-vNORMAL, vNORMAL);
+			else stateColorCmd = 0;
+		}
+
 		// line trace moe
 		SensorData sd;
 		sd = readSensor(sd);
@@ -122,17 +156,43 @@ void loop() {
 					Serial.print(nColorCmd); Serial.print('*'); Serial.println(ColorCmds);
 					if (nColorCmd >= 3){
 						// execute motion
-						if (strncmp(ColorCmds, "345", 3) == 0){
+						if (strncmp(ColorCmds, COLOR_CMD_VERY_SLOW, 3) == 0){
+							Serial.println("CMD:veryslow");
+							normalV = vVerySlow;
+						}
+						if (strncmp(ColorCmds, COLOR_CMD_SLOW, 3) == 0){
 							Serial.println("CMD:slow");
-//							normalV = vSlow;
+							normalV = vSlow;
 						}
-						if (strncmp(ColorCmds, "543", 3) == 0){
+						if (strncmp(ColorCmds, COLOR_CMD_FAST, 3) == 0){
 							Serial.println("CMD:fast");
-//							normalV = vFast;
+							normalV = vFast;
 						}
-						if (strncmp(ColorCmds, "434", 3) == 0){
-							Serial.println("CMD:reverse");
-							dirTrace = 1- dirTrace;
+						if (strncmp(ColorCmds, COLOR_CMD_VERY_FAST, 3) == 0){
+							Serial.println("CMD:veryfast");
+							normalV = vVeryFast;
+						}
+						if (strncmp(ColorCmds, COLOR_CMD_PAUSE, 3) == 0){
+							Serial.println("CMD:pause");
+							tm10ms = 300; // pause time = 300ms
+							stateColorCmd = COLOR_CMD_ST_PAUSE;
+						}
+						if (strncmp(ColorCmds, COLOR_CMD_LEFT_AT_CROSS, 3) == 0){
+							Serial.println("CMD:left at cross");
+							stateColorCmd = COLOR_CMD_ST_CROSS_LEFT;
+						}
+						if (strncmp(ColorCmds, COLOR_CMD_RIGHT_AT_CROSS, 3) == 0){
+							Serial.println("CMD:right at cross");
+							stateColorCmd = COLOR_CMD_ST_CROSS_RIGHT;
+						}
+						if (strncmp(ColorCmds, COLOR_CMD_UTURN, 3) == 0){
+							Serial.println("CMD:u-turn");
+							stateColorCmd = COLOR_CMD_ST_UTURN;
+							tm10ms = tm10deg * 18; // turn 180deg
+						}
+						if (strncmp(ColorCmds, COLOR_CMD_GO_BACK, 3) == 0){
+							Serial.println("CMD:go back");
+							dirTrace = 1 - dirTrace;
 						}
 					}
 					nColorCmd = 0;
@@ -171,17 +231,28 @@ void loop() {
 		else if (vR < MIN_V) vR = MIN_V;
 		if (dirTrace == 0) setMotorSpeed(vL, vR);
 		else setMotorSpeed(-vR, -vL);
-/*
 		// cross detection
 #define LINE_CROSS_TH 3.0
 		if (sd.width > LINE_CROSS_TH){
 			if (fCross == 0){
 				fCross = 1;
 				Serial.println("cross");
+				if (stateColorCmd == COLOR_CMD_ST_CROSS_LEFT){
+					// turn left at cross
+					fMotion = MOTION_TURN_LEFT;
+					tm10ms = tm10deg * 9; // turn 90deg
+					Serial.println("turn left at cross");
+				}
+				if (stateColorCmd == COLOR_CMD_ST_CROSS_RIGHT){
+					// turn right at cross
+					fMotion = MOTION_TURN_RIGHT;
+					tm10ms = tm10deg * 9; // turn 90deg
+					Serial.println("turn right at cross");
+				}
 			}
 		}
 		else fCross = 0;
-*/
+
 	}
 	else{
 		// micro:bit command motion
