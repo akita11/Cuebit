@@ -99,7 +99,8 @@ void setLED(uint8_t r, uint8_t g, uint8_t b)
 	pixel.setPixelColor(0,  pixel.Color(r, g, b)); pixel.setPixelColor(1,  pixel.Color(r, g, b)); pixel.show();
 }
 
-uint8_t classify(float R, float G, float B) {
+uint8_t classify(float R, float G, float B, float W) {
+/*
 	// SVM model on 241105
 	float coeff[4][3] = {
   	{ 0.1129,  0.0743, -0.0001 }, // K
@@ -112,6 +113,22 @@ uint8_t classify(float R, float G, float B) {
 	float decision_values[4];
 	for (int i = 0; i < 4; i++) {
 		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + intercepts[i];
+	}
+*/
+	// SVM model on 241219
+	const float coeff[5][4] = {
+		{2.358767, 0.676650, 0.927163, -0.008750},
+		{0.408377, -0.959291, 0.012983, 0.001878},
+		{-1.178557, 1.437267, -0.432852, -0.001315},
+		{-0.697496, -0.585303, 0.749408, 0.001804},
+		{0.000184, 0.000014, -0.000435, 0.024202},
+	};
+
+	const float intercepts[5] = {-56.276174, 0.011451, -0.007201, -0.020519, -398.521060};
+
+	float decision_values[4];
+	for (int i = 0; i < 4; i++) {
+		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + coeff[i][3] * W + intercepts[i];
 	}
 
 	int max_index = 0;
@@ -165,8 +182,8 @@ SensorData readSensor(SensorData sd)
 	sensorBf = (float)sensorB / (float)sensorW * 100.0;
 
 	if (sensorW > WHITE_COLOR) sensorInfo = COLOR_WHITE;
-	else if (sensorW < BLACK_COLOR) sensorInfo = COLOR_BLACK;
-	else sensorInfo = classify(sensorRf, sensorGf, sensorBf);
+//	else if (sensorW < BLACK_COLOR) sensorInfo = COLOR_BLACK;
+	else sensorInfo = classify(sensorRf, sensorGf, sensorBf, sensorW);
 
 	sd.color = sensorInfo;
 	if (sensorInfo == COLOR_BLACK) setLED(0, 0, 0);
@@ -177,7 +194,7 @@ SensorData readSensor(SensorData sd)
 
 	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, BLACK_COLOR, WHITE_COLOR);	
 //	if (s == 0.0) sd.line = -10.0;
-	if (s <  0.5) sd.line = -10.0;
+	if (s <  0.3) sd.line = -10.0;
 	else sd.line = sd.line / s;
 	sd.width = s;
 	if (fDebug == 1){
