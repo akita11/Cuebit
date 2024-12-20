@@ -13,6 +13,9 @@ uint8_t tm10deg = 8; // [ms]
 #define vVerySlow 0.2
 #define vVeryFast 0.6
 float normalV = vNORMAL;
+
+#define DELAY_AFTER_CROSS 100 // [x10ms]
+
 float vL = 0.0, vR = 0.0; // left/right motor speed (0.0 - 1.0)
 uint8_t dirTrace = 0;
 
@@ -58,7 +61,7 @@ uint8_t fCross = 0; // "Cross point" detected
 char buf[N_BUF];
 uint8_t pBuf = 0;
 
-// Valiables for color command in line trace mode 
+// Variables for color command in line trace mode 
 uint8_t nColorCmd = 0;
 #define MAX_COLOR_CMD 10
 char ColorCmds[MAX_COLOR_CMD];
@@ -74,6 +77,7 @@ uint8_t stateColorCmd = 0;
 #define COLOR_CMD_ST_CROSS_RIGHT   4
 #define COLOR_CMD_ST_UTURN         5
 uint8_t cmdTurnAtCross = 0;
+uint8_t cmdTurnAtCross2 = 0;
 
 double leftDevi = 1.0, rightDevi = 1.0;
 uint8_t tSkate = 0;
@@ -121,6 +125,15 @@ void loop() {
 			if (tm10ms > 0) setMotorSpeed(-vNORMAL, vNORMAL);
 			else stateColorCmd = 0;
 		}
+		else if (cmdTurnAtCross2 == COLOR_CMD_ST_CROSS_LEFT){
+//			Serial.println(tm10ms);
+			if (tm10ms > 0) setMotorSpeed(vNORMAL, vNORMAL);
+			else{
+				stateColorCmd = 0; cmdTurnAtCross = 0;
+				tm10ms = tm10deg * 9; // turn 90deg
+				fMotion = MOTION_TURN_LEFT;
+			}
+		}
 		else if (fMotion == MOTION_TURN_RIGHT){
 			if (tm10ms > 0) setMotorSpeed(vNORMAL, -vNORMAL);
 			else{
@@ -129,6 +142,7 @@ void loop() {
 			}
 		}
 		else if (fMotion == MOTION_TURN_LEFT){
+//			Serial.print('#'); Serial.println(tm10ms);
 			if (tm10ms > 0) setMotorSpeed(-vNORMAL, vNORMAL);
 			else{
 				stateColorCmd = 0;
@@ -203,6 +217,7 @@ void loop() {
 								Serial.println("CMD:left at cross");
 								stateColorCmd = COLOR_CMD_ST_CROSS_LEFT;
 								cmdTurnAtCross = COLOR_CMD_ST_CROSS_LEFT;
+								cmdTurnAtCross2 = 0;
 							}
 							if (strncmp(ColorCmds, COLOR_CMD_FORWARD_AT_CROSS, 3) == 0){
 								Serial.println("CMD:forward at cross");
@@ -277,14 +292,15 @@ void loop() {
 						Serial.print("cross "); Serial.println(cmdTurnAtCross);
 						if (cmdTurnAtCross == COLOR_CMD_ST_CROSS_LEFT){
 							// turn left at cross
-								fMotion = MOTION_TURN_LEFT;
-							tm10ms = tm10deg * 9; // turn 90deg
+//							fMotion = MOTION_TURN_LEFT;
+							tm10ms = DELAY_AFTER_CROSS;
+							cmdTurnAtCross2 = COLOR_CMD_ST_CROSS_LEFT;
 							Serial.println("turn left at cross");
-							cmdTurnAtCross = 0;
+//							cmdTurnAtCross = 0;
 						}
 						if (cmdTurnAtCross == COLOR_CMD_ST_CROSS_RIGHT){
 							// turn right at cross
-							fMotion = MOTION_TURN_RIGHT;
+//							fMotion = MOTION_TURN_RIGHT;
 							tm10ms = tm10deg * 9; // turn 90deg
 							Serial.println("turn right at cross");
 							cmdTurnAtCross = 0;
