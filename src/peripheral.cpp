@@ -9,16 +9,16 @@
 // https://github.com/thewknd/VEML6040/
 VEML6040 RGBWSensor;
 
-#define R_B 5 // PD5
-#define R_A 6 // PD6
-#define L_A 9 // PB1
-#define L_B 10 // PB2
-#define LEDC 3 // for WS2812
+#define R_B    5 // PD5
+#define R_A    6 // PD6
+#define L_A    9 // PB1
+#define L_B    10 // PB2
+#define LEDC   3 // for WS2812
 #define LED_EN 2 // PD2
-#define PD_R2 A3
-#define PD_R1 A2
-#define PD_L1 A1
-#define PD_L2 A0
+#define PD_R2  A3
+#define PD_R1  A2
+#define PD_L1  A1
+#define PD_L2  A0
 
 /*
 // for narrow sensor
