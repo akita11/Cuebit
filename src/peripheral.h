@@ -12,7 +12,6 @@
 typedef struct{
 	uint8_t color;
 	float line;
-	float line_previous;
 	float width;
 } SensorData;
 
@@ -23,6 +22,6 @@ extern void setLED(uint8_t r, uint8_t g, uint8_t b);
 extern SensorData readSensor(SensorData sd);
 extern uint8_t fDebug;
 extern float vL, vR;
-
+extern float LRratio;
 
 

@@ -20,29 +20,15 @@ VEML6040 RGBWSensor;
 #define PD_L1  A1
 #define PD_L2  A0
 
-/*
-// for narrow sensor
-#define BLACK_PD_R2 35
-#define WHITE_PD_R2 313
-#define BLACK_PD_R1 37
-#define WHITE_PD_R1 343
-#define BLACK_PD_L1 38
-#define WHITE_PD_L1 337
-#define BLACK_PD_L2 39
-#define WHITE_PD_L2 351
-#define BLACK_COLOR 3200
-#define WHITE_COLOR 10000
-*/
-
 // for wide sensor
-#define BLACK_PD_R2 50
-#define WHITE_PD_R2 450
-#define BLACK_PD_R1 45
+#define BLACK_PD_R2 45
+#define WHITE_PD_R2 300
+#define BLACK_PD_R1 50
 #define WHITE_PD_R1 350
-#define BLACK_PD_L1 52
-#define WHITE_PD_L1 460
+#define BLACK_PD_L1 40
+#define WHITE_PD_L1 300
 #define BLACK_PD_L2 50
-#define WHITE_PD_L2 400
+#define WHITE_PD_L2 350
 #define BLACK_COLOR 11000
 #define WHITE_COLOR 16000
 
@@ -74,7 +60,8 @@ void enableSensorLED(uint8_t f)
 }
 
 uint16_t convMotorPWM(uint8_t max_pwm, float v){
-	return((uint16_t)(max_pwm * v));
+	if (v > 1.0) return(max_pwm);
+	else return((uint16_t)(max_pwm * v));
 }
 
 // vL/vR : -1 - +1 / +=FWD, -=BWD
@@ -87,10 +74,10 @@ void setMotorSpeed(float vL, float vR)
 		analogWrite(L_A, 0); analogWrite(L_B, -convMotorPWM(MAX_PWM_L, vL));
 	}
 	if (vR > 0){
-		analogWrite(R_A, convMotorPWM(MAX_PWM_R, vR));	analogWrite(R_B, 0);
+		analogWrite(R_A, convMotorPWM(MAX_PWM_R, vR * LRratio));	analogWrite(R_B, 0);
 	}
 	else{
-		analogWrite(R_A, 0); analogWrite(R_B, -convMotorPWM(MAX_PWM_R, vR));
+		analogWrite(R_A, 0); analogWrite(R_B, -convMotorPWM(MAX_PWM_R, vR * LRratio));
 	}
 }
 
@@ -115,6 +102,7 @@ uint8_t classify(float R, float G, float B, float W) {
 		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + intercepts[i];
 	}
 */
+/*
 	// SVM model on 241219
 	const float coeff[5][4] = {
 		{2.358767, 0.676650, 0.927163, -0.008750},
@@ -130,9 +118,24 @@ uint8_t classify(float R, float G, float B, float W) {
 	for (int i = 0; i < 4; i++) {
 		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + coeff[i][3] * W + intercepts[i];
 	}
+*/
+
+	// SVM model on 250106
+	float coeff[4][4] = {
+  	{ 0.62724268,	0.32172001,	0.23411658,	-0.00471049}, // K
+		{ 0.13224463, -0.50406597, 	-0.24437417, 0.0024367}, // R
+		{-0.4864799,	0.40343498,	-0.37843872,	0.00149977}, // G
+		{-0.27300741,	-0.22108903,	0.38869631,	0.000774} // B
+	};
+	float intercepts[4] = { 0.02183718,	-0.00960655,	-0.00712973,	-0.0051009};
+
+	float decision_values[4];
+	for (int i = 0; i < 4; i++) {
+		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + coeff[i][3] * W + intercepts[i];
+	}
 
 	int max_index = 0;
-	for (int i = 1; i < 4; i++) {
+	for (int i = 0; i < 4; i++) {
   	if (decision_values[i] > decision_values[max_index]) {
     	max_index = i;
   	}
@@ -182,7 +185,6 @@ SensorData readSensor(SensorData sd)
 	sensorBf = (float)sensorB / (float)sensorW * 100.0;
 
 	if (sensorW > WHITE_COLOR) sensorInfo = COLOR_WHITE;
-//	else if (sensorW < BLACK_COLOR) sensorInfo = COLOR_BLACK;
 	else sensorInfo = classify(sensorRf, sensorGf, sensorBf, sensorW);
 
 	sd.color = sensorInfo;

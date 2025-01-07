@@ -1,18 +1,24 @@
 #include <Arduino.h>
 #include <MsTimer2.h>
 #include "peripheral.h"
+#include <EEPROM.h>
+
+#define EEPROM_KP 0 // Kp*80
+#define EEPROM_KD 1 // Kd*20
+#define EEPROM_VN 2 // Vn*100
+#define EEPROM_LR 3 // LRratio*100
 
 // Motion Control Parameters
-float Kp = 1.0; // P gain for Line trace
-float Kd = 0.0; // D gain for Line trace
+float Kp; // P gain for Line trace
+float Kd; // D gain for Line trace
 uint8_t tm1cm = 115; // [ms]
 uint8_t tm10deg = 8; // [ms]
-#define vNORMAL 0.3
-#define vSlow 0.25
-#define vFast 0.5
-#define vVerySlow 0.2
-#define vVeryFast 0.6
-float normalV = vNORMAL;
+float vNormal, vVerySlow, vSlow, vFast, vVeryFast;
+
+#define vNORMAL 0.3 // for turn and step go
+
+float LRratio = 1.0;
+float line_previous = 0;
 
 #define DELAY_AFTER_CROSS 50 // [x10ms]
 
@@ -103,8 +109,29 @@ void timerISR()
 	}
 }
 
+void setSpeedParams()
+{
+	vVerySlow = vNormal * 0.5;
+	vSlow = vNormal * 0.6;
+	vFast = vNormal * 1.5;
+	vVeryFast = vNormal * 2.0;
+}
+
 void setup() {
 	Serial.begin(9600);
+
+	if (EEPROM.read(EEPROM_KP) < 255) Kp = (float)EEPROM.read(EEPROM_KP) / 80.0;
+	else Kp = 1.0;
+	if (EEPROM.read(EEPROM_KD) < 255) Kd = (float)EEPROM.read(EEPROM_KD) / 20.0;
+	else Kd = 0.0;
+	if (EEPROM.read(EEPROM_VN) < 100) vNormal = (float)EEPROM.read(EEPROM_VN) / 100.0;
+	else vNormal = 0.3;
+	if (EEPROM.read(EEPROM_LR) < 255) LRratio = (float)EEPROM.read(EEPROM_LR) / 100.0;
+	else LRratio = 1.0;
+
+	setSpeedParams();
+
+	Serial.print("Kp="); Serial.print(Kp); Serial.print(" Kd="); Serial.print(Kd); Serial.print(" Vn="); Serial.print(vNormal); Serial.print(" LR="); Serial.println(LRratio);
 	init_peripheral();
 	MsTimer2::set(10, timerISR); // every 10ms
 	MsTimer2::start();
@@ -138,7 +165,6 @@ void loop() {
 				else fMotion = MOTION_TURN_RIGHT;
 			}
 		}
-
 		if (fMotion == MOTION_TURN_RIGHT){
 			if (tm10ms > 0) setMotorSpeed(vNORMAL, -vNORMAL);
 			else{
@@ -161,8 +187,8 @@ void loop() {
 			detectedColor = sd.color;
 
 			// differential value of lineValue
-			float d_line = sd.line - sd.line_previous;
-			sd.line_previous = sd.line;
+			float d_line = sd.line - line_previous;
+			line_previous = sd.line;
 
 			// color command detection	
 #define COLOR_MARK_TH 10
@@ -195,23 +221,23 @@ void loop() {
 							// execute motion
 							if (strncmp(ColorCmds, COLOR_CMD_VERY_SLOW, 3) == 0){
 							Serial.println("CMD:veryslow");
-							normalV = vVerySlow;
+							vNormal = vVerySlow;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_SLOW, 3) == 0){
 							Serial.println("CMD:slow");
-							normalV = vSlow;
+							vNormal = vSlow;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_NORMAL, 3) == 0){
 							Serial.println("CMD:normal");
-							normalV = vNORMAL;
+							vNormal = vNORMAL;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_FAST, 3) == 0){
 							Serial.println("CMD:fast");
-							normalV = vFast;
+							vNormal = vFast;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_VERY_FAST, 3) == 0){
 							Serial.println("CMD:veryfast");
-							normalV = vVeryFast;
+							vNormal = vVeryFast;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_PAUSE, 3) == 0){
 								Serial.println("CMD:pause");
@@ -250,33 +276,32 @@ void loop() {
 			}
 
 			// P control
-//			Serial.println(sd.line);
 			if (sd.line < -5.0){
 			// seek for line
-				vL = normalV; vR = normalV;
+				vL = vNormal; vR = vNormal;
 			}
 			else{
-				if (sd.color == COLOR_BLACK){
 					if (sd.line > 0.0){
 						// line at right, turn right
-						vL = normalV;
-						vR = normalV - Kp * sd.line;
+						vL = vNormal;
+						vR = vNormal - Kp * sd.line;
 					}
 					else if (sd.line < 0.0){
 						// line at left, turn left
-						vL = normalV + Kp * sd.line;
-						vR = normalV;
+						vL = vNormal + Kp * sd.line;
+						vR = vNormal;
 					}
 					else{
-						vL = normalV;
-						vR = normalV;
+						vL = vNormal;
+						vR = vNormal;
 					}
-				}
+/*
 				else{
 					// go straint on color marker
-					vL = normalV;
-					vR = normalV;
+					vL = vNormal;
+					vR = vNormal;
 				}
+*/
 			}
 			// D control
 			vL += d_line * Kd;
@@ -285,8 +310,10 @@ void loop() {
 			else if (vL < MIN_V) vL = MIN_V;
 			if (vR > MAX_V) vR = MAX_V;
 			else if (vR < MIN_V) vR = MIN_V;
+
 			if (dirTrace == 0) setMotorSpeed(vL, vR);
 			else setMotorSpeed(-vR, -vL);
+//			Serial.print(vL); Serial.print(','); Serial.println(vR);
 			// cross detection
 			if (stateColorCmd != COLOR_CMD_ST_UTURN){
 #define LINE_CROSS_TH 3.0
@@ -363,7 +390,8 @@ void loop() {
 				if (buf[0] == 'P'){
 					Serial.print("Kp(k)="); Serial.print(Kp);
 					Serial.print(" Kd(K)="); Serial.print(Kd); 
-					Serial.print(" V(v)="); Serial.print(normalV); 
+					Serial.print(" V(v)="); Serial.print(vNormal); 
+					Serial.print(" LRr(r)="); Serial.print(LRratio);
 					Serial.print(" tm1cm(f)="); Serial.print(tm1cm); 
 					Serial.print(" tm10deg(g)="); Serial.println(tm10deg);
 				}
@@ -373,10 +401,17 @@ void loop() {
 				if (buf[0] == 'd') fDebug = 0;
 				if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
 				if (buf[0] == 'K'){ Kd = atof(&buf[1]); Serial.println(Kd); }
-				if (buf[0] == 'v'){ normalV = atof(&buf[1]); Serial.println(normalV); }
+				if (buf[0] == 'r'){ LRratio = atof(&buf[1]); Serial.println(LRratio); }
+				if (buf[0] == 'v'){ vNormal = atof(&buf[1]); Serial.println(vNormal); setSpeedParams(); }	
 				if (buf[0] == 'f'){ tm1cm = atoi(&buf[1]); Serial.println(tm1cm); }
 				if (buf[0] == 'g'){ tm10deg = atoi(&buf[1]); Serial.println(tm10deg); }
-
+				if (buf[0] == '!'){
+					EEPROM.write(EEPROM_KP, (uint8_t)(Kp * 80));
+					EEPROM.write(EEPROM_KD, (uint8_t)(Kd * 20));
+					EEPROM.write(EEPROM_VN, (uint8_t)(vNormal * 100));
+					EEPROM.write(EEPROM_LR, (uint8_t)(LRratio * 100));
+					Serial.println("parameters saved.");
+				}
 				// micro:bit command
 				if (buf[0] == '$'){
 					Serial.println("enter micro:bit command mode");
