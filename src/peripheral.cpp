@@ -21,13 +21,13 @@ VEML6040 RGBWSensor;
 #define PD_L2  A0
 
 // for wide sensor
-#define BLACK_PD_R2 45
-#define WHITE_PD_R2 300
-#define BLACK_PD_R1 50
-#define WHITE_PD_R1 350
-#define BLACK_PD_L1 40
-#define WHITE_PD_L1 300
-#define BLACK_PD_L2 50
+#define BLACK_PD_R2 36
+#define WHITE_PD_R2 360
+#define BLACK_PD_R1 42
+#define WHITE_PD_R1 342
+#define BLACK_PD_L1 45
+#define WHITE_PD_L1 400
+#define BLACK_PD_L2 35
 #define WHITE_PD_L2 350
 #define BLACK_COLOR 11000
 #define WHITE_COLOR 16000
@@ -129,6 +129,7 @@ uint8_t classify(float R, float G, float B, float W) {
 	};
 	float intercepts[4] = { 0.02183718,	-0.00960655,	-0.00712973,	-0.0051009};
 */
+/*
 	// SVM model on 250107
 	float coeff[4][4] = {
     {0.7915031829126435, 0.21811362291647074, 0.18818497119634045, -0.004734605859142181},
@@ -137,6 +138,25 @@ uint8_t classify(float R, float G, float B, float W) {
     {-0.457087237344295, -0.29783606922443995, 0.8184243113283347, -0.00015674014727286382}
 	};
 	float intercepts[] = {-0.0022824318860480293, -0.00943883639848339, -0.0019556079696409962, -0.0038688072084012313};
+*/
+/*
+	// SVM model on 250204
+	float coeff[4][4] = {
+		{0.313390299,-0.016027054,0.065194798,-0.001882512},
+		{0.40437232,-0.330667013,-0.18258023,0.001391661},
+		{-0.485394388,0.449288413,-0.251409875,0.000450455},
+		{-0.232368232,-0.102594347,0.368795308,4.03964E-05}
+	};
+	float intercepts[] = {4.992144795,-10.03804443,4.910028326,0.135871256};
+*/
+	// SVM model on 250206
+	float coeff[4][4] = {
+		{0.528539945, -0.187528438, 0.312149697, -0.001893526},
+		{0.368227732, -0.2503185, -0.681466694, 0.002008556},
+		{0.180587695, 0.292519793, -0.724353139, 0.000359511},
+		{-1.077355372, 0.145327145, 1.093681105, -0.000474541}
+	};
+	float intercepts[] = {-1.867320642, 0.665782609, 2.863887692, -1.662837825};
 
 	float decision_values[4];
 	for (int i = 0; i < 4; i++) {
@@ -208,24 +228,29 @@ SensorData readSensor(SensorData sd)
 	if (s <  0.3) sd.line = -10.0;
 	else sd.line = sd.line / s;
 	sd.width = s;
-	if (fDebug == 1){
+	if (fDebug > 0){
 	 	Serial.print(sensorRf); Serial.print(",");
 	 	Serial.print(sensorGf); Serial.print(",");
 	 	Serial.print(sensorBf); Serial.print(",");
 	 	Serial.print(sensorW); Serial.print(",");
-	 	Serial.print(analogRead(PD_R2)); Serial.print(',');
-	 	Serial.print(analogRead(PD_R1)); Serial.print(',');
-	 	Serial.print(analogRead(PD_L1)); Serial.print(',');
-	 	Serial.print(analogRead(PD_L2)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_R2), BLACK_PD_R2, WHITE_PD_R2)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_R1), BLACK_PD_R1, WHITE_PD_R1)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_L1), BLACK_PD_L1, WHITE_PD_L1)); Serial.print(',');
-		Serial.print(lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2)); Serial.print(',');
-		if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
-		Serial.print(':'); Serial.print(sd.line);
-		Serial.print(':'); Serial.print(sd.width);
-		Serial.print('/'); Serial.print(sd.color);
-		Serial.print('|'); Serial.print(vL); Serial.print(','); Serial.println(vR);
+		if (fDebug == 1){
+	 		Serial.print(",|,");
+		 	Serial.print(analogRead(PD_R2)); Serial.print(',');
+		 	Serial.print(analogRead(PD_R1)); Serial.print(',');
+	 		Serial.print(analogRead(PD_L1)); Serial.print(',');
+	 		Serial.print(analogRead(PD_L2)); Serial.print(",|,");
+			Serial.print(lineValue(analogRead(PD_R2), BLACK_PD_R2, WHITE_PD_R2)); Serial.print(',');
+			Serial.print(lineValue(analogRead(PD_R1), BLACK_PD_R1, WHITE_PD_R1)); Serial.print(',');
+			Serial.print(lineValue(analogRead(PD_L1), BLACK_PD_L1, WHITE_PD_L1)); Serial.print(',');
+			Serial.print(lineValue(analogRead(PD_L2), BLACK_PD_L2, WHITE_PD_L2)); Serial.print(',');
+			if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
+			Serial.print(",|,"); Serial.print(sd.line);
+			Serial.print(','); Serial.print(sd.width);
+//			Serial.print('/'); Serial.print(sd.color);
+//			Serial.print('|'); Serial.print(vL); Serial.print(','); Serial.println(vR);
+			Serial.println("");
+		}
+		else if (fDebug >= 2 && fDebug <= 5) Serial.println(fDebug); // with color label
 	}
 	return(sd);
 }

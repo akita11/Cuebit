@@ -397,7 +397,13 @@ void loop() {
 				}
 				if (buf[0] == 'T') {fLineTrace = 1; pColorCmd = COLOR_WHITE; nColorCmd = 0; }
 				if (buf[0] == 't') {fLineTrace = 0; setMotorSpeed(0, 0); }
-				if (buf[0] == 'D') fDebug = 1;
+				if (buf[0] == 'D'){
+					 if (buf[1] == 'k') fDebug = 2;
+					 else if (buf[1] == 'r') fDebug = 3;
+					 else if (buf[1] == 'g') fDebug = 4;
+					 else if (buf[1] == 'b') fDebug = 5;
+					 else fDebug = 1;
+				}
 				if (buf[0] == 'd') fDebug = 0;
 				if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
 				if (buf[0] == 'K'){ Kd = atof(&buf[1]); Serial.println(Kd); }
