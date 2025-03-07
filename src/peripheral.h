@@ -24,4 +24,6 @@ extern uint8_t fDebug;
 extern float vL, vR;
 extern float LRratio;
 
+extern uint8_t fLowBattery;
+
 

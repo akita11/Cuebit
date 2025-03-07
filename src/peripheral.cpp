@@ -217,12 +217,14 @@ SensorData readSensor(SensorData sd)
 	else sensorInfo = classify(sensorRf, sensorGf, sensorBf, sensorW);
 
 	sd.color = sensorInfo;
-	if (sensorInfo == COLOR_BLACK) setLED(0, 0, 0);
-	else if (sensorInfo == COLOR_RED) setLED(10, 0, 0);
-	else if (sensorInfo == COLOR_GREEN) setLED(0, 10, 0);
-	else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 10);
-	else if (sensorInfo == COLOR_WHITE) setLED(10, 10, 10);
-
+	if (fLowBattery == 0){
+		if (sensorInfo == COLOR_BLACK) setLED(0, 0, 0);
+		else if (sensorInfo == COLOR_RED) setLED(10, 0, 0);
+		else if (sensorInfo == COLOR_GREEN) setLED(0, 10, 0);
+		else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 10);
+		else if (sensorInfo == COLOR_WHITE) setLED(10, 10, 10);
+	}
+	
 	if (sensorInfo != COLOR_WHITE) s += lineValue(sensorW, BLACK_COLOR, WHITE_COLOR);	
 //	if (s == 0.0) sd.line = -10.0;
 	if (s <  0.3) sd.line = -10.0;

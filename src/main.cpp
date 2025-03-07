@@ -95,6 +95,10 @@ uint8_t stateZigzag = 0;
 #define ZIGZAG_STEP 100 // [x 10ms] of half cycle
 #define ZIGZAG_TURN 50 // [x 10ms] of turn time
 
+uint8_t fLowBatteryLED = 0;
+uint8_t fLowBattery = 0;
+uint8_t cntLowBattery = 0;
+
 // every 10ms
 void timerISR()
 {
@@ -106,6 +110,15 @@ void timerISR()
 	}
 	if (fMotion == MOTION_ZIGZAG){
 		stateZigzag = (stateZigzag + 1) % (ZIGZAG_STEP * 2);
+	}
+	if (fLowBattery == 1){
+		cntLowBattery++;
+		if (cntLowBattery > 10){
+			if (fLowBatteryLED == 0) setLED(20, 0, 0);
+			else setLED(0, 0, 0);
+			fLowBatteryLED = 1 - fLowBatteryLED;
+			cntLowBattery = 0;
+		}
 	}
 }
 
@@ -144,7 +157,35 @@ int16_t getParam(char *s){
 	else return(0);
 }
 
+#define LOW_BATTERY_TH_HL 3.8 // [V], with LDO of Vdrop=0.6V
+#define LOW_BATTERY_TH_LH 4.0 // [V], with LDO of Vdrop=0.6V
+float sumBatteryVoltage = 0.0;
+uint8_t nSumBatteryVolgate = 0;
+#define N_SUM_BATTERY_VOLTAGE 100
+
+float getBatteryVoltage()
+{
+	float v;
+	v = analogRead(A6)  * (3.3 / 0.6) / 1023.0; // Vbat = VDD * 0.6
+	return(v);	
+}
+
 void loop() {
+	sumBatteryVoltage += getBatteryVoltage();
+	nSumBatteryVolgate++;
+	if (nSumBatteryVolgate == N_SUM_BATTERY_VOLTAGE){
+		nSumBatteryVolgate = 0;
+		sumBatteryVoltage /= N_SUM_BATTERY_VOLTAGE;
+		//Serial.print(sumBatteryVoltage); Serial.print(' '); Serial.print(fLowBattery); Serial.print(' '); Serial.println(fLowBatteryLED);
+		if (fLowBattery == 0){
+			if (sumBatteryVoltage < LOW_BATTERY_TH_HL) fLowBattery = 1;
+		}
+		else{
+			if (sumBatteryVoltage > LOW_BATTERY_TH_LH) fLowBattery = 0;
+		}
+	}
+	
+
 	if (fLineTrace == 1){
 		if (stateColorCmd == COLOR_CMD_ST_PAUSE){
 			if (tm10ms > 0) setMotorSpeed(0, 0);
