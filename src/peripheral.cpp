@@ -30,8 +30,7 @@ VEML6040 RGBWSensor;
 #define BLACK_PD_L2 35
 #define WHITE_PD_L2 350
 #define BLACK_COLOR 11000
-#define WHITE_COLOR 16000
-
+#define WHITE_COLOR 20000
 
 #define MAX_PWM_L 255
 #define MAX_PWM_R 255
@@ -149,7 +148,8 @@ uint8_t classify(float R, float G, float B, float W) {
 	};
 	float intercepts[] = {4.992144795,-10.03804443,4.910028326,0.135871256};
 */
-	// SVM model on 250206
+/*
+// SVM model on 250206
 	float coeff[4][4] = {
 		{0.528539945, -0.187528438, 0.312149697, -0.001893526},
 		{0.368227732, -0.2503185, -0.681466694, 0.002008556},
@@ -157,21 +157,62 @@ uint8_t classify(float R, float G, float B, float W) {
 		{-1.077355372, 0.145327145, 1.093681105, -0.000474541}
 	};
 	float intercepts[] = {-1.867320642, 0.665782609, 2.863887692, -1.662837825};
+	*/
+/*
+	// SVM model on 250318, using Yellow instead of Blue
+	const float coeff[4][4] = {
+    {-0.1849, -0.3695, 1.1175, -0.0012},
+    {0.8419, -1.0080, 0.0009, 0.0007},
+    {-1.1418, 0.9577, 0.0443, -0.0001},
+    {-0.0742, 0.3076, -0.7294, 0.0006}
+	};
+	const float intercepts[4] = {0.0081, 0.0027, 0.1049, -0.0339};
+*/
+/*
+	// SVM model on 250318, using Yellow instead of Blue, and detecting W
+	const float coeff[5][4] = {
+    {-0.6071, -0.2082, 0.8940, 0.0001},
+    {1.1006, 0.3727, -0.1502, -0.0048},
+    {0.7466, -0.7254, -0.0583, 0.0001},
+    {-3.8503, 2.7830, -0.4656, 0.0025},
+    {-0.0968, 0.1147, -0.5824, 0.0010}
+	};
+	const float intercepts[5] = {-0.0519, 0.0628, 0.0287, 0.9933, -0.0132};
+*/
+	// SVM model on 250318, W/K/R/G/Y
+	const float coeff[5][4] = {
+    {-0.9065, -0.1997, 0.7918, 0.0014},
+    {0.0866, -0.1910, 0.7128, -0.0019},
+    {0.7216, -0.6957, -0.0720, 0.00002},
+    {-0.8884, 0.8518, -0.0515, -0.0004},
+    {0.0086, 0.3788, -1.0278, 0.0006}
+	};
+	const float intercepts[5] = {-0.0586, 0.0156, 0.0136, 0.0881, -0.0271};
 
-	float decision_values[4];
-	for (int i = 0; i < 4; i++) {
+
+	float decision_values[5];
+	for (int i = 0; i < 5; i++) {
 		decision_values[i] = coeff[i][0] * R + coeff[i][1] * G + coeff[i][2] * B + coeff[i][3] * W + intercepts[i];
 	}
 
 	int max_index = 0;
-	for (int i = 0; i < 4; i++) {
-  	if (decision_values[i] > decision_values[max_index]) {
+	float max_score = decision_values[0];
+	for (int i = 1; i < 5; i++) {
+  	if (decision_values[i] > max_score) {
+			max_score = decision_values[i];
     	max_index = i;
   	}
   }
+/*
 	if (max_index == 0) return(COLOR_BLACK);
 	else if (max_index == 1) return(COLOR_RED);
 	else if (max_index == 2) return(COLOR_GREEN);
+	else return(COLOR_BLUE);
+*/
+	if (max_index == 0) return(COLOR_WHITE);
+	else if (max_index == 1) return(COLOR_BLACK);
+	else if (max_index == 2) return(COLOR_RED);
+	else if (max_index == 3) return(COLOR_GREEN);
 	else return(COLOR_BLUE);
 }
 
@@ -213,15 +254,18 @@ SensorData readSensor(SensorData sd)
 	sensorGf = (float)sensorG / (float)sensorW * 100.0;
 	sensorBf = (float)sensorB / (float)sensorW * 100.0;
 
+/*
 	if (sensorW > WHITE_COLOR) sensorInfo = COLOR_WHITE;
 	else sensorInfo = classify(sensorRf, sensorGf, sensorBf, sensorW);
-
+*/
+	sensorInfo = classify(sensorRf, sensorGf, sensorBf, sensorW); // model including W 
 	sd.color = sensorInfo;
-	if (fLowBattery == 0){
+	if (stLEDmsg == LEDMSG_NONE){
 		if (sensorInfo == COLOR_BLACK) setLED(0, 0, 0);
 		else if (sensorInfo == COLOR_RED) setLED(10, 0, 0);
 		else if (sensorInfo == COLOR_GREEN) setLED(0, 10, 0);
-		else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 10);
+//		else if (sensorInfo == COLOR_BLUE) setLED(0, 0, 10); // blue (old)
+		else if (sensorInfo == COLOR_BLUE) setLED(6, 6, 0); // yellow
 		else if (sensorInfo == COLOR_WHITE) setLED(10, 10, 10);
 	}
 	
@@ -235,8 +279,8 @@ SensorData readSensor(SensorData sd)
 	 	Serial.print(sensorGf); Serial.print(",");
 	 	Serial.print(sensorBf); Serial.print(",");
 	 	Serial.print(sensorW); Serial.print(",");
-		if (fDebug == 1){
-	 		Serial.print(",|,");
+		if (fDebug == 6){
+	 		Serial.print("|,");
 		 	Serial.print(analogRead(PD_R2)); Serial.print(',');
 		 	Serial.print(analogRead(PD_R1)); Serial.print(',');
 	 		Serial.print(analogRead(PD_L1)); Serial.print(',');
@@ -248,11 +292,12 @@ SensorData readSensor(SensorData sd)
 			if (sensorInfo != COLOR_WHITE) Serial.print(lineValue(sensorW, BLACK_COLOR, WHITE_COLOR));
 			Serial.print(",|,"); Serial.print(sd.line);
 			Serial.print(','); Serial.print(sd.width);
-//			Serial.print('/'); Serial.print(sd.color);
+			Serial.print('/'); Serial.print(sd.color);
 //			Serial.print('|'); Serial.print(vL); Serial.print(','); Serial.println(vR);
+			Serial.print(','); Serial.print(BatteryVoltage);
 			Serial.println("");
 		}
-		else if (fDebug >= 2 && fDebug <= 5) Serial.println(fDebug); // with color label
+		else if (fDebug >= 1 && fDebug <= 5) Serial.println(fDebug); // with color label
 	}
 	return(sd);
 }

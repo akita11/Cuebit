@@ -24,6 +24,8 @@ extern uint8_t fDebug;
 extern float vL, vR;
 extern float LRratio;
 
-extern uint8_t fLowBattery;
-
-
+#define LEDMSG_NONE 0
+#define LEDMSG_LOW_BATTERY 1
+#define LEDMSG_LOST_LINE 2
+extern uint8_t stLEDmsg;
+extern float BatteryVoltage;

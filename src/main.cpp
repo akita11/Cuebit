@@ -95,9 +95,9 @@ uint8_t stateZigzag = 0;
 #define ZIGZAG_STEP 100 // [x 10ms] of half cycle
 #define ZIGZAG_TURN 50 // [x 10ms] of turn time
 
-uint8_t fLowBatteryLED = 0;
-uint8_t fLowBattery = 0;
-uint8_t cntLowBattery = 0;
+uint8_t fLEDmsg = 0;
+uint8_t stLEDmsg = 0;
+uint8_t cntLEDmsg = 0;
 
 // every 10ms
 void timerISR()
@@ -111,13 +111,16 @@ void timerISR()
 	if (fMotion == MOTION_ZIGZAG){
 		stateZigzag = (stateZigzag + 1) % (ZIGZAG_STEP * 2);
 	}
-	if (fLowBattery == 1){
-		cntLowBattery++;
-		if (cntLowBattery > 10){
-			if (fLowBatteryLED == 0) setLED(20, 0, 0);
+	if (stLEDmsg != LEDMSG_NONE){
+		cntLEDmsg++;
+		if (cntLEDmsg > 10){
+			if (fLEDmsg == 1){
+				if (stLEDmsg == LEDMSG_LOW_BATTERY) setLED(20, 0, 0);
+				else if (stLEDmsg == LEDMSG_LOST_LINE) setLED(20, 20, 0);
+			}
 			else setLED(0, 0, 0);
-			fLowBatteryLED = 1 - fLowBatteryLED;
-			cntLowBattery = 0;
+			fLEDmsg = 1 - fLEDmsg;
+			cntLEDmsg = 0;
 		}
 	}
 }
@@ -157,11 +160,12 @@ int16_t getParam(char *s){
 	else return(0);
 }
 
-#define LOW_BATTERY_TH_HL 3.8 // [V], with LDO of Vdrop=0.6V
-#define LOW_BATTERY_TH_LH 4.0 // [V], with LDO of Vdrop=0.6V
+#define LOW_BATTERY_TH_HL 3.5 // [V], with LDO of Vdrop=0.2V
+#define LOW_BATTERY_TH_LH 4.0 // [V], with LDO of Vdrop=0.2V
 float sumBatteryVoltage = 0.0;
 uint8_t nSumBatteryVolgate = 0;
-#define N_SUM_BATTERY_VOLTAGE 100
+#define N_SUM_BATTERY_VOLTAGE 50
+float BatteryVoltage = 0.0;
 
 float getBatteryVoltage()
 {
@@ -174,18 +178,17 @@ void loop() {
 	sumBatteryVoltage += getBatteryVoltage();
 	nSumBatteryVolgate++;
 	if (nSumBatteryVolgate == N_SUM_BATTERY_VOLTAGE){
+		BatteryVoltage = sumBatteryVoltage / N_SUM_BATTERY_VOLTAGE;
+		sumBatteryVoltage = 0;
 		nSumBatteryVolgate = 0;
-		sumBatteryVoltage /= N_SUM_BATTERY_VOLTAGE;
-		//Serial.print(sumBatteryVoltage); Serial.print(' '); Serial.print(fLowBattery); Serial.print(' '); Serial.println(fLowBatteryLED);
-		if (fLowBattery == 0){
-			if (sumBatteryVoltage < LOW_BATTERY_TH_HL) fLowBattery = 1;
+		if (stLEDmsg == LEDMSG_NONE){
+			if (BatteryVoltage <= LOW_BATTERY_TH_HL) stLEDmsg = LEDMSG_LOW_BATTERY;
 		}
-		else{
-			if (sumBatteryVoltage > LOW_BATTERY_TH_LH) fLowBattery = 0;
+		else if (stLEDmsg == LEDMSG_LOW_BATTERY){
+			if (BatteryVoltage >= LOW_BATTERY_TH_LH) stLEDmsg = LEDMSG_NONE;
 		}
 	}
 	
-
 	if (fLineTrace == 1){
 		if (stateColorCmd == COLOR_CMD_ST_PAUSE){
 			if (tm10ms > 0) setMotorSpeed(0, 0);
@@ -318,24 +321,26 @@ void loop() {
 
 			// P control
 			if (sd.line < -5.0){
-			// seek for line
-				vL = vNormal; vR = vNormal;
+				// pause at marker/line lost
+				vL = 0.0; vR = 0.0;
+				if (stLEDmsg != LEDMSG_LOW_BATTERY) stLEDmsg = LEDMSG_LOST_LINE;
 			}
 			else{
-					if (sd.line > 0.0){
-						// line at right, turn right
-						vL = vNormal;
-						vR = vNormal - Kp * sd.line;
-					}
-					else if (sd.line < 0.0){
-						// line at left, turn left
-						vL = vNormal + Kp * sd.line;
-						vR = vNormal;
-					}
-					else{
-						vL = vNormal;
-						vR = vNormal;
-					}
+				if (stLEDmsg != LEDMSG_LOW_BATTERY) stLEDmsg = LEDMSG_NONE;
+				if (sd.line > 0.0){
+					// line at right, turn right
+					vL = vNormal;
+					vR = vNormal - Kp * sd.line;
+				}
+				else if (sd.line < 0.0){
+					// line at left, turn left
+					vL = vNormal + Kp * sd.line;
+					vR = vNormal;
+				}
+				else{
+					vL = vNormal;
+					vR = vNormal;
+				}
 /*
 				else{
 					// go straint on color marker
@@ -443,7 +448,8 @@ void loop() {
 					 else if (buf[1] == 'r') fDebug = 3;
 					 else if (buf[1] == 'g') fDebug = 4;
 					 else if (buf[1] == 'b') fDebug = 5;
-					 else fDebug = 1;
+					 else if (buf[1] == 'w') fDebug = 1;
+					 else fDebug = 6;
 				}
 				if (buf[0] == 'd') fDebug = 0;
 				if (buf[0] == 'k'){ Kp = atof(&buf[1]); Serial.println(Kp); }
