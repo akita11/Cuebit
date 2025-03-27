@@ -7,6 +7,8 @@
 #define EEPROM_KD 1 // Kd*20
 #define EEPROM_VN 2 // Vn*100
 #define EEPROM_LR 3 // LRratio*100
+#define EEPROM_TF 4 // tm1cm
+#define EEPROM_TT 5 // tm10deg
 
 // Motion Control Parameters
 float Kp; // P gain for Line trace
@@ -20,7 +22,8 @@ float vNormal, vVerySlow, vSlow, vFast, vVeryFast;
 float LRratio = 1.0;
 float line_previous = 0;
 
-#define DELAY_AFTER_CROSS 50 // [x10ms]
+//#define DELAY_AFTER_CROSS 50 // [x10ms]
+#define DELAY_AFTER_CROSS 30 // [x10ms]
 
 float vL = 0.0, vR = 0.0; // left/right motor speed (0.0 - 1.0)
 uint8_t dirTrace = 0;
@@ -98,6 +101,9 @@ uint8_t stateZigzag = 0;
 uint8_t fLEDmsg = 0;
 uint8_t stLEDmsg = 0;
 uint8_t cntLEDmsg = 0;
+uint8_t cntNoLine = 0;
+uint8_t fNoLine = 0;
+#define TIME_NOLINE 50 // [x10ms]
 
 // every 10ms
 void timerISR()
@@ -123,6 +129,10 @@ void timerISR()
 			cntLEDmsg = 0;
 		}
 	}
+	if (fNoLine == 1){
+		if (cntNoLine < TIME_NOLINE) cntNoLine++;
+	}
+	else cntNoLine = 0;
 }
 
 void setSpeedParams()
@@ -144,6 +154,10 @@ void setup() {
 	else vNormal = 0.3;
 	if (EEPROM.read(EEPROM_LR) < 255) LRratio = (float)EEPROM.read(EEPROM_LR) / 100.0;
 	else LRratio = 1.0;
+	if (EEPROM.read(EEPROM_TF) < 255) tm1cm = EEPROM.read(EEPROM_TF);
+	else tm1cm = 115;
+	if (EEPROM.read(EEPROM_TT) < 255) tm10deg = EEPROM.read(EEPROM_TT);
+	else tm10deg = 8;
 
 	setSpeedParams();
 
@@ -209,7 +223,9 @@ void loop() {
 				else fMotion = MOTION_TURN_RIGHT;
 			}
 		}
+
 		if (fMotion == MOTION_TURN_RIGHT){
+			fNoLine = 0; cntNoLine = 0;
 			if (tm10ms > 0) setMotorSpeed(vNORMAL, -vNORMAL);
 			else{
 				stateColorCmd = 0;
@@ -217,7 +233,7 @@ void loop() {
 			}
 		}
 		else if (fMotion == MOTION_TURN_LEFT){
-//			Serial.print('#'); Serial.println(tm10ms);
+			fNoLine = 0; cntNoLine = 0;
 			if (tm10ms > 0) setMotorSpeed(-vNORMAL, vNORMAL);
 			else{
 				stateColorCmd = 0;
@@ -320,12 +336,17 @@ void loop() {
 			}
 
 			// P control
-			if (sd.line < -5.0){
-				// pause at marker/line lost
-				vL = 0.0; vR = 0.0;
-				if (stLEDmsg != LEDMSG_LOW_BATTERY) stLEDmsg = LEDMSG_LOST_LINE;
+			if (sd.line < -5.0 || sd.color == COLOR_WHITE){
+				// start count timer at marker/line lost
+				fNoLine = 1;
+				if (cntNoLine == TIME_NOLINE){
+					// line lost for a while, stop
+					vL = 0.0; vR = 0.0;
+					if (stLEDmsg != LEDMSG_LOW_BATTERY) stLEDmsg = LEDMSG_LOST_LINE;
+				}
 			}
 			else{
+				fNoLine = 0;
 				if (stLEDmsg != LEDMSG_LOW_BATTERY) stLEDmsg = LEDMSG_NONE;
 				if (sd.line > 0.0){
 					// line at right, turn right
@@ -341,25 +362,16 @@ void loop() {
 					vL = vNormal;
 					vR = vNormal;
 				}
-/*
-				else{
-					// go straint on color marker
-					vL = vNormal;
-					vR = vNormal;
-				}
-*/
+				// D control
+				vL += d_line * Kd;
+				vR += d_line * Kd;
+				if (vL > MAX_V) vL = MAX_V;
+				else if (vL < MIN_V) vL = MIN_V;
+				if (vR > MAX_V) vR = MAX_V;
+				else if (vR < MIN_V) vR = MIN_V;
 			}
-			// D control
-			vL += d_line * Kd;
-			vR += d_line * Kd;
-			if (vL > MAX_V) vL = MAX_V;
-			else if (vL < MIN_V) vL = MIN_V;
-			if (vR > MAX_V) vR = MAX_V;
-			else if (vR < MIN_V) vR = MIN_V;
-
 			if (dirTrace == 0) setMotorSpeed(vL, vR);
 			else setMotorSpeed(-vR, -vL);
-//			Serial.print(vL); Serial.print(','); Serial.println(vR);
 			// cross detection
 			if (stateColorCmd != COLOR_CMD_ST_UTURN){
 #define LINE_CROSS_TH 3.0
@@ -463,6 +475,8 @@ void loop() {
 					EEPROM.write(EEPROM_KD, (uint8_t)(Kd * 20));
 					EEPROM.write(EEPROM_VN, (uint8_t)(vNormal * 100));
 					EEPROM.write(EEPROM_LR, (uint8_t)(LRratio * 100));
+					EEPROM.write(EEPROM_TF, tm1cm);
+					EEPROM.write(EEPROM_TT, tm10deg);
 					Serial.println("parameters saved.");
 				}
 				// micro:bit command
