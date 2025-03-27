@@ -147,17 +147,17 @@ void setup() {
 	Serial.begin(9600);
 
 	if (EEPROM.read(EEPROM_KP) < 255) Kp = (float)EEPROM.read(EEPROM_KP) / 80.0;
-	else Kp = 1.0;
+	else Kp = 0.7;
 	if (EEPROM.read(EEPROM_KD) < 255) Kd = (float)EEPROM.read(EEPROM_KD) / 20.0;
-	else Kd = 0.0;
+	else Kd = 5.0;
 	if (EEPROM.read(EEPROM_VN) < 100) vNormal = (float)EEPROM.read(EEPROM_VN) / 100.0;
 	else vNormal = 0.3;
 	if (EEPROM.read(EEPROM_LR) < 255) LRratio = (float)EEPROM.read(EEPROM_LR) / 100.0;
 	else LRratio = 1.0;
 	if (EEPROM.read(EEPROM_TF) < 255) tm1cm = EEPROM.read(EEPROM_TF);
-	else tm1cm = 115;
+	else tm1cm = 90;
 	if (EEPROM.read(EEPROM_TT) < 255) tm10deg = EEPROM.read(EEPROM_TT);
-	else tm10deg = 8;
+	else tm10deg = 5;
 
 	setSpeedParams();
 
