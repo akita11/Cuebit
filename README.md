@@ -6,6 +6,8 @@
 
 <img src="https://github.com/akita11/Cuebit/blob/main/Cuebit3.jpg" width="240px">
 
+ライントレースと3色のカラーマーカでの動作制御ができるプログラミング教材ロボットカーです。micro:bitを装着して、micro:bitのカスタムブロックで動作制御することもできます。
+
 [使い方・動作の例(YouTube動画)](https://youtu.be/czKjS_mCOlM)
 
 
