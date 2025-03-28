@@ -459,7 +459,7 @@ void loop() {
 					 if (buf[1] == 'k') fDebug = 2;
 					 else if (buf[1] == 'r') fDebug = 3;
 					 else if (buf[1] == 'g') fDebug = 4;
-					 else if (buf[1] == 'b') fDebug = 5;
+					 else if (buf[1] == 'y') fDebug = 5;
 					 else if (buf[1] == 'w') fDebug = 1;
 					 else fDebug = 6;
 				}
