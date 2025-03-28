@@ -42,7 +42,7 @@ micro:bitのカスタムブロックを使ってCue:bitの動作を制御でき�
 micro:bitからCue:bitへのコマンド（通信プロトコル:UART 9600bps N81）は以下です。以下の"NNN"は数値(10進数)で与えるコマンドパラメータです。また各コマンドは行末コード(0x0d or 0x0a)で終端します。なおCue:bitのGroveコネクタと本体後部の6ピンコネクタ用端子(FTDI-Basic用)も、micro:bitの通信端子と並列に接続されています。
 
 - $ : micro:bit制御モードに開始
-- # : micro:bit制御モードを終了
+- \# : micro:bit制御モードを終了
 - RNNN : NNN度回転（NNNが正=時計回り、負=反時計回り）
 - B : 停止
 - FNNN : NNN[cm]進む
