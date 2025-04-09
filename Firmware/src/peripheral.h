@@ -27,5 +27,7 @@ extern float LRratio;
 #define LEDMSG_NONE 0
 #define LEDMSG_LOW_BATTERY 1
 #define LEDMSG_LOST_LINE 2
+#define LEDMSG_MICROBIT 3
+
 extern uint8_t stLEDmsg;
 extern float BatteryVoltage;

@@ -19,7 +19,7 @@ float vNormal, vVerySlow, vSlow, vFast, vVeryFast;
 
 #define vNORMAL 0.3 // for turn and step go
 
-float LRratio = 1.0;
+float LRratio = 1.4;
 float line_previous = 0;
 
 //#define DELAY_AFTER_CROSS 50 // [x10ms]
@@ -120,13 +120,20 @@ void timerISR()
 	if (stLEDmsg != LEDMSG_NONE){
 		cntLEDmsg++;
 		if (cntLEDmsg > 10){
-			if (fLEDmsg == 1){
-				if (stLEDmsg == LEDMSG_LOW_BATTERY) setLED(20, 0, 0);
-				else if (stLEDmsg == LEDMSG_LOST_LINE) setLED(20, 20, 0);
-			}
-			else setLED(0, 0, 0);
-			fLEDmsg = 1 - fLEDmsg;
 			cntLEDmsg = 0;
+			fLEDmsg = (fLEDmsg + 1) % 10;
+			if (stLEDmsg == LEDMSG_LOW_BATTERY){
+				if ((fLEDmsg % 2) == 1) setLED(20, 0, 0); // red
+				else setLED(0, 0, 0);
+			}
+			else if (stLEDmsg == LEDMSG_LOST_LINE){
+				if ((fLEDmsg % 2) == 1) setLED(20, 20, 0); // yellow
+				else setLED(0, 0, 0);
+			}
+			else if (stLEDmsg == LEDMSG_MICROBIT){
+				if (fLEDmsg > 5) setLED(10, 0, 10); // purple
+				else setLED(0, 0, 0);
+			}
 		}
 	}
 	if (fNoLine == 1){
@@ -145,6 +152,7 @@ void setSpeedParams()
 
 void setup() {
 	Serial.begin(9600);
+//	analogWrite(11, 128); while(1); // for OSC calib, 244.14Hz on MOSI
 
 	if (EEPROM.read(EEPROM_KP) < 255) Kp = (float)EEPROM.read(EEPROM_KP) / 80.0;
 	else Kp = 0.7;
@@ -195,7 +203,7 @@ void loop() {
 		BatteryVoltage = sumBatteryVoltage / N_SUM_BATTERY_VOLTAGE;
 		sumBatteryVoltage = 0;
 		nSumBatteryVolgate = 0;
-		if (stLEDmsg == LEDMSG_NONE){
+		if (stLEDmsg != LEDMSG_LOW_BATTERY){
 			if (BatteryVoltage <= LOW_BATTERY_TH_HL) stLEDmsg = LEDMSG_LOW_BATTERY;
 		}
 		else if (stLEDmsg == LEDMSG_LOW_BATTERY){
@@ -484,12 +492,12 @@ void loop() {
 					Serial.println("enter micro:bit command mode");
 					fLineTrace = 0;
 					setMotorSpeed(0, 0);
-					setLED(20, 0, 20); // purple
+					stLEDmsg = LEDMSG_MICROBIT;
 				}
 				if (buf[0] == '#'){
 					Serial.println("exit micro:bit command mode");
 					fLineTrace = 1;
-					setLED(0, 0, 0); // black
+					stLEDmsg = LEDMSG_NONE;
 				}
 				if (buf[0] == 'R'){
 					// Rxx turn right(+) or left(-) xx degree
