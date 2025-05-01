@@ -63,7 +63,7 @@ uint8_t fLineTrace = 1; // Line trace mode at power on
 uint8_t fDebug = 0; // debug output of sensor data
 
 uint8_t detectedColor;
-int tm10ms = 0;
+uint16_t	 tm10ms = 0;
 uint8_t fCross = 0; // "Cross point" detected
 
 #define N_BUF 64 // Serial RX buffer size
@@ -534,14 +534,14 @@ void loop() {
 					param = getParam(buf+1);
 					fMotion = MOTION_ZIGZAG;
 					stateZigzag = 0;
-					tm10ms = param; // tentative
+					tm10ms = param * 20; // tentative
 				}
 				if (buf[0] == 'S'){
 					// Sxx skate xxcm
 					param = getParam(buf+1);
 					fMotion = MOTION_SKATE;
 					tSkate = 0;
-					tm10ms = param; // tentative
+					tm10ms = param * 20; // tentative
 				}
 			}
 			else{ buf[pBuf++] = c; if (pBuf == N_BUF) pBuf = 0; }
