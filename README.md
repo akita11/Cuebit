@@ -41,7 +41,7 @@ micro:bitのカスタムブロックを使ってCue:bitの動作を制御でき�
 
 ### 参考：技術的仕様
 
-micro:bitからCue:bitへのコマンド（通信プロトコル:UART 9600bps N81）は以下です。以下の"NNN"は数値(10進数)で与えるコマンドパラメータです。また各コマンドは行末コード(0x0d or 0x0a)で終端します。なおCue:bitのGroveコネクタと本体後部の6ピンコネクタ用端子(FTDI-Basic用)も、micro:bitの通信端子と並列に接続されています。
+micro:bitからCue:bitへのコマンド（通信プロトコル:UART 9600bps N81）は以下です。以下の"NNN"は数値(10進数)で与えるコマンドパラメータです。また各コマンドは行末コード(0x0d or 0x0a)で終端します。なおCue:bitのGroveコネクタと本体後部の6ピンコネクタ用端子(FTDI-Basic用)も、micro:bitの通信端子と並列に接続されています。なお[「Groveケーブル-USBシリアル接続ケーブル」](https://www.switch-science.com/products/9460)を使うと、FTDI-Basicと本体Grove端子とを接続できます。
 
 - $ : micro:bit制御モードに開始
 - \# : micro:bit制御モードを終了
