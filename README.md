@@ -38,6 +38,8 @@
 micro:bitのカスタムブロックを使ってCue:bitの動作を制御でききます。
 [こちらの手順](https://docs.google.com/document/d/1bRiQpdVX2RdSoQZLEZQx14lWcuVc2Sd8CT0sPL3RYwU/)でMakeCode用カスタムブロックを追加し、micro:bitのプログラムを作成してmicro:bitに書き込みます。その後、そのmicro:bitをCue:bitに差し込んでCue:bitの電源をいれると、そのプログラム通りにCue:bitが動作します。
 
+※モータの特性仕様上、左右の回転速度には差があり、以下のコマンドである程度は調整はできますが、完全に直進することはできません。ご了承ください。
+
 
 ### 参考：技術的仕様
 
