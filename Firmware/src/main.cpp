@@ -27,7 +27,6 @@ float line_previous = 0;
 
 float vL = 0.0, vR = 0.0; // left/right motor speed (0.0 - 1.0)
 uint8_t dirTrace = 0;
-
 // motion types in micro:bit cmd mode
 #define MOTION_NONE				0 
 #define MOTION_FWD				1
@@ -196,6 +195,12 @@ float getBatteryVoltage()
 	return(v);	
 }
 
+uint8_t checkDebugging()
+{
+	if (fDebug == 0 || fDebug == 6) return(0);
+	else return(1);
+}
+
 void loop() {
 	sumBatteryVoltage += getBatteryVoltage();
 	nSumBatteryVolgate++;
@@ -284,56 +289,58 @@ void loop() {
 					if ((ColorCmd == COLOR_BLACK || ColorCmd == COLOR_WHITE) && (pColorCmd != COLOR_BLACK && pColorCmd != COLOR_WHITE)){
 						ColorCmds[nColorCmd] = '\0';
 						// end of color command
-						Serial.print(nColorCmd); Serial.print('*'); Serial.println(ColorCmds);
+						if (checkDebugging() == 0){
+							Serial.print(nColorCmd); Serial.print('*'); Serial.println(ColorCmds);
+						}
 						if (nColorCmd >= 3){
 							// execute motion
 							if (strncmp(ColorCmds, COLOR_CMD_VERY_SLOW, 3) == 0){
-							Serial.println("CMD:veryslow");
+							if (checkDebugging() == 0) Serial.println("CMD:veryslow");
 							vNormal = vVerySlow;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_SLOW, 3) == 0){
-							Serial.println("CMD:slow");
+							if (checkDebugging() == 0) Serial.println("CMD:slow");
 							vNormal = vSlow;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_NORMAL, 3) == 0){
-							Serial.println("CMD:normal");
+							if (checkDebugging() == 0) Serial.println("CMD:normal");
 							vNormal = vNORMAL;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_FAST, 3) == 0){
-							Serial.println("CMD:fast");
+							if (checkDebugging() == 0) Serial.println("CMD:fast");
 							vNormal = vFast;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_VERY_FAST, 3) == 0){
-							Serial.println("CMD:veryfast");
+							if (checkDebugging() == 0) Serial.println("CMD:veryfast");
 							vNormal = vVeryFast;
 						}
 							if (strncmp(ColorCmds, COLOR_CMD_PAUSE, 3) == 0){
-								Serial.println("CMD:pause");
+								if (checkDebugging() == 0) Serial.println("CMD:pause");
 								tm10ms = 300; // pause time = 300ms
 								stateColorCmd = COLOR_CMD_ST_PAUSE;
 							}
 							if (strncmp(ColorCmds, COLOR_CMD_LEFT_AT_CROSS, 3) == 0){
-								Serial.println("CMD:left at cross");
+								if (checkDebugging() == 0) Serial.println("CMD:left at cross");
 								tm10ms = 0;
 								cmdTurnAtCross = COLOR_CMD_ST_CROSS_TO_LEFT;
 							}
 							if (strncmp(ColorCmds, COLOR_CMD_FORWARD_AT_CROSS, 3) == 0){
-								Serial.println("CMD:forward at cross");
+								if (checkDebugging() == 0) Serial.println("CMD:forward at cross");
 								tm10ms = 0;
 								cmdTurnAtCross = COLOR_CMD_ST_CROSS_FORWARD;
 							}
 							if (strncmp(ColorCmds, COLOR_CMD_RIGHT_AT_CROSS, 3) == 0){
-								Serial.println("CMD:right at cross");
+								if (checkDebugging() == 0) Serial.println("CMD:right at cross");
 								tm10ms = 0;
 								cmdTurnAtCross = COLOR_CMD_ST_CROSS_TO_RIGHT;
 							}
 							if (strncmp(ColorCmds, COLOR_CMD_UTURN, 3) == 0){
-								Serial.println("CMD:u-turn");
+								if (checkDebugging() == 0) Serial.println("CMD:u-turn");
 								stateColorCmd = COLOR_CMD_ST_UTURN;
 								tm10ms = tm10deg * 18; // turn 180deg
 							}
 							if (strncmp(ColorCmds, COLOR_CMD_GO_BACK, 3) == 0){
-								Serial.println("CMD:go back");
+								if (checkDebugging() == 0) Serial.println("CMD:go back");
 								dirTrace = 1 - dirTrace;
 							}
 						}
@@ -386,21 +393,23 @@ void loop() {
 				if (sd.width > LINE_CROSS_TH){
 					if (fCross == 0){
 						fCross = 1;
-						Serial.print("cross "); Serial.println(cmdTurnAtCross);
+						if (checkDebugging() == 0){
+							Serial.print("cross "); Serial.println(cmdTurnAtCross);
+						}
 						if (cmdTurnAtCross == COLOR_CMD_ST_CROSS_TO_LEFT){
 							// turn left at cross
 							tm10ms = DELAY_AFTER_CROSS + tm10deg * 9;
 							cmdTurnAtCross = COLOR_CMD_ST_CROSS_LEFT;
-							Serial.println("turn left at cross");
+							if (checkDebugging() == 0) Serial.println("turn left at cross");
 						}
 						else if (cmdTurnAtCross == COLOR_CMD_ST_CROSS_TO_RIGHT){
 							// turn right at cross
 							tm10ms = DELAY_AFTER_CROSS + tm10deg * 9;
 							cmdTurnAtCross = COLOR_CMD_ST_CROSS_RIGHT;
-							Serial.println("turn right at cross");
+							if (checkDebugging() == 0) Serial.println("turn right at cross");
 						}
 						else if (cmdTurnAtCross == COLOR_CMD_ST_CROSS_FORWARD){
-							Serial.println("go forward at cross");
+							if (checkDebugging() == 0) Serial.println("go forward at cross");
 							cmdTurnAtCross = 0;
 						}
 					}
