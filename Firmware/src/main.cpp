@@ -385,8 +385,12 @@ void loop() {
 				if (vR > MAX_V) vR = MAX_V;
 				else if (vR < MIN_V) vR = MIN_V;
 			}
-			if (dirTrace == 0) setMotorSpeed(vL, vR);
-			else setMotorSpeed(-vR, -vL);
+			if (checkDebugging() == 0){
+				if (dirTrace == 0) setMotorSpeed(vL, vR);
+				else setMotorSpeed(-vR, -vL);
+			}
+			else setMotorSpeed(0, 0);
+
 			// cross detection
 			if (stateColorCmd != COLOR_CMD_ST_UTURN){
 #define LINE_CROSS_TH 3.0
